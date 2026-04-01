@@ -7,12 +7,13 @@ import SwitchableStream from '~/lib/.server/llm/switchable-stream';
 import type { IProviderSetting } from '~/types/model';
 import { createScopedLogger } from '~/utils/logger';
 import { getFilePaths, selectContext } from '~/lib/.server/llm/select-context';
-import type { ContextAnnotation, ProgressAnnotation } from '~/types/context';
+import type { ContextAnnotation, DesignCardsAnnotation, ProgressAnnotation } from '~/types/context';
 import { WORK_DIR } from '~/utils/constants';
 import { createSummary } from '~/lib/.server/llm/create-summary';
 import { extractPropertiesFromMessage } from '~/lib/.server/llm/utils';
 import type { DesignScheme } from '~/types/design-scheme';
 import { MCPService } from '~/lib/services/mcpService';
+import { BuiltinToolService } from '~/lib/services/builtinToolService';
 import { StreamRecoveryManager } from '~/lib/.server/llm/stream-recovery';
 
 export async function action(args: ActionFunctionArgs) {
@@ -85,6 +86,9 @@ async function chatAction({ context, request }: ActionFunctionArgs) {
 
   try {
     const mcpService = MCPService.getInstance();
+    const builtinToolService = BuiltinToolService.getInstance();
+    builtinToolService.setContext(files || {}, apiKeys, context.cloudflare?.env as Env | undefined);
+
     const totalMessageContent = messages.reduce((acc, message) => acc + message.content, '');
     logger.debug(`Total message length: ${totalMessageContent.split(' ').length}, words`);
 
@@ -207,16 +211,46 @@ async function chatAction({ context, request }: ActionFunctionArgs) {
           // logger.debug('Code Files Selected');
         }
 
+        const allTools: Record<string, any> = {
+          ...mcpService.toolsWithoutExecute,
+          ...builtinToolService.tools,
+        };
+
         const options: StreamingOptions = {
           supabaseConnection: supabase,
           toolChoice: 'auto',
-          tools: mcpService.toolsWithoutExecute,
+          tools: allTools,
           maxSteps: maxLLMSteps,
-          onStepFinish: ({ toolCalls }) => {
-            // add tool call annotations for frontend processing
+          onStepFinish: ({ toolCalls, toolResults }) => {
             toolCalls.forEach((toolCall) => {
               mcpService.processToolCall(toolCall, dataStream);
+              builtinToolService.processToolCall(toolCall, dataStream);
             });
+
+            if (toolResults) {
+              for (const result of toolResults as any[]) {
+                if (
+                  result.type === 'tool-result' &&
+                  result.toolName === 'stitch_design' &&
+                  typeof result.result === 'object' &&
+                  result.result !== null &&
+                  'success' in result.result &&
+                  result.result.success &&
+                  'designs' in result.result
+                ) {
+                  const designs = result.result.designs as Array<{
+                    option: number;
+                    title: string;
+                    imageUrl: string;
+                    htmlUrl: string;
+                  }>;
+                  dataStream.writeMessageAnnotation({
+                    type: 'designCards',
+                    designs,
+                  } satisfies DesignCardsAnnotation);
+                }
+              }
+            }
           },
           onFinish: async ({ text: content, finishReason, usage }) => {
             logger.debug('usage', JSON.stringify(usage));

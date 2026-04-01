@@ -16,7 +16,8 @@ import type {
   StepStartUIPart,
 } from '@ai-sdk/ui-utils';
 import { ToolInvocations } from './ToolInvocations';
-import type { ToolCallAnnotation } from '~/types/context';
+import { DesignCards } from './DesignCards';
+import type { ToolCallAnnotation, DesignCardsAnnotation } from '~/types/context';
 
 interface AssistantMessageProps {
   content: string;
@@ -96,6 +97,10 @@ export const AssistantMessage = memo(
       promptTokens: number;
       totalTokens: number;
     } = filteredAnnotations.find((annotation) => annotation.type === 'usage')?.value;
+
+    const designCards = filteredAnnotations.find(
+      (annotation) => annotation.type === 'designCards',
+    ) as DesignCardsAnnotation | undefined;
 
     const toolInvocations = parts?.filter((part) => part.type === 'tool-invocation');
     const toolCallAnnotations = filteredAnnotations.filter(
@@ -179,6 +184,9 @@ export const AssistantMessage = memo(
         <Markdown append={append} chatMode={chatMode} setChatMode={setChatMode} model={model} provider={provider} html>
           {content}
         </Markdown>
+        {designCards && designCards.designs?.length > 0 && (
+          <DesignCards designs={designCards.designs} append={append} />
+        )}
         {toolInvocations && toolInvocations.length > 0 && (
           <ToolInvocations
             toolInvocations={toolInvocations}

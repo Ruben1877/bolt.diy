@@ -13,32 +13,41 @@ export default class MoonshotProvider extends BaseProvider {
   };
 
   staticModels: ModelInfo[] = [
-    { name: 'moonshot-v1-8k', label: 'Moonshot v1 8K', provider: 'Moonshot', maxTokenAllowed: 8000 },
-    { name: 'moonshot-v1-32k', label: 'Moonshot v1 32K', provider: 'Moonshot', maxTokenAllowed: 32000 },
-    { name: 'moonshot-v1-128k', label: 'Moonshot v1 128K', provider: 'Moonshot', maxTokenAllowed: 128000 },
-    { name: 'moonshot-v1-auto', label: 'Moonshot v1 Auto', provider: 'Moonshot', maxTokenAllowed: 128000 },
     {
-      name: 'moonshot-v1-8k-vision-preview',
-      label: 'Moonshot v1 8K Vision',
+      name: 'kimi-k2.5',
+      label: 'Kimi K2.5 Multimodal (Best)',
       provider: 'Moonshot',
-      maxTokenAllowed: 8000,
+      maxTokenAllowed: 262144,
     },
     {
-      name: 'moonshot-v1-32k-vision-preview',
-      label: 'Moonshot v1 32K Vision',
+      name: 'kimi-k2-0905-preview',
+      label: 'Kimi K2 0905 (Best Coding)',
       provider: 'Moonshot',
-      maxTokenAllowed: 32000,
+      maxTokenAllowed: 262144,
     },
     {
-      name: 'moonshot-v1-128k-vision-preview',
-      label: 'Moonshot v1 128K Vision',
+      name: 'kimi-k2-thinking',
+      label: 'Kimi K2 Thinking',
       provider: 'Moonshot',
-      maxTokenAllowed: 128000,
+      maxTokenAllowed: 262144,
     },
+    {
+      name: 'kimi-k2-turbo-preview',
+      label: 'Kimi K2 Turbo (Fast)',
+      provider: 'Moonshot',
+      maxTokenAllowed: 262144,
+    },
+    {
+      name: 'kimi-k2-thinking-turbo',
+      label: 'Kimi K2 Thinking Turbo',
+      provider: 'Moonshot',
+      maxTokenAllowed: 262144,
+    },
+    { name: 'kimi-k2-0711-preview', label: 'Kimi K2 0711', provider: 'Moonshot', maxTokenAllowed: 131072 },
     { name: 'kimi-latest', label: 'Kimi Latest', provider: 'Moonshot', maxTokenAllowed: 128000 },
-    { name: 'kimi-k2-0711-preview', label: 'Kimi K2 Preview', provider: 'Moonshot', maxTokenAllowed: 128000 },
-    { name: 'kimi-k2-turbo-preview', label: 'Kimi K2 Turbo', provider: 'Moonshot', maxTokenAllowed: 128000 },
-    { name: 'kimi-thinking-preview', label: 'Kimi Thinking', provider: 'Moonshot', maxTokenAllowed: 128000 },
+    { name: 'moonshot-v1-128k', label: 'Moonshot v1 128K', provider: 'Moonshot', maxTokenAllowed: 128000 },
+    { name: 'moonshot-v1-32k', label: 'Moonshot v1 32K', provider: 'Moonshot', maxTokenAllowed: 32000 },
+    { name: 'moonshot-v1-8k', label: 'Moonshot v1 8K', provider: 'Moonshot', maxTokenAllowed: 8000 },
   ];
 
   async getDynamicModels(
@@ -112,9 +121,24 @@ export default class MoonshotProvider extends BaseProvider {
       throw new Error(`Missing API key for ${this.name} provider`);
     }
 
+    const isThinkingModel = model.includes('thinking');
+
     const openai = createOpenAI({
       baseURL: 'https://api.moonshot.ai/v1',
       apiKey,
+      fetch: async (url: RequestInfo | URL, init?: RequestInit) => {
+        if (init?.body && !isThinkingModel) {
+          try {
+            const body = JSON.parse(init.body as string);
+            body.thinking = { type: 'disabled' };
+            init = { ...init, body: JSON.stringify(body) };
+          } catch {
+            // ignore parse errors
+          }
+        }
+
+        return globalThis.fetch(url, init);
+      },
     });
 
     return openai(model);

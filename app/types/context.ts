@@ -24,3 +24,13 @@ export type ToolCallAnnotation = {
   toolName: string;
   toolDescription: string;
 };
+
+export type DesignCardsAnnotation = {
+  type: 'designCards';
+  designs: Array<{
+    option: number;
+    title: string;
+    imageUrl: string;
+    htmlUrl: string;
+  }>;
+};

@@ -1,6 +1,7 @@
 import { getSystemPrompt } from './prompts/prompts';
 import optimized from './prompts/optimized';
 import { getFineTunedPrompt } from './prompts/new-prompt';
+import ultimatePrompt from './prompts/ultimate';
 import type { DesignScheme } from '~/types/design-scheme';
 
 export interface PromptOptions {
@@ -28,8 +29,13 @@ export class PromptLibrary {
     }
   > = {
     default: {
-      label: 'Default Prompt',
-      description: 'An fine tuned prompt for better results and less token usage',
+      label: 'Ultimate Prompt',
+      description: 'Combined best practices from Lovable, Cursor, v0, and Devin',
+      get: (options) => ultimatePrompt(options),
+    },
+    standard: {
+      label: 'Standard Prompt',
+      description: 'Previous default fine-tuned prompt',
       get: (options) => getFineTunedPrompt(options.cwd, options.supabase, options.designScheme),
     },
     original: {

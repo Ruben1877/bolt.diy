@@ -35,12 +35,19 @@ export const PROVIDER_COMPLETION_LIMITS: Record<string, number> = {
  * These models use internal reasoning tokens and have different API parameter requirements
  */
 export function isReasoningModel(modelName: string): boolean {
-  const result = /^(o1|o3|gpt-5)/i.test(modelName);
+  return /^(o1|o3|gpt-5)/i.test(modelName);
+}
 
-  // DEBUG: Test regex matching
-  console.log(`REGEX TEST: "${modelName}" matches reasoning pattern: ${result}`);
+export function getFixedTemperature(modelName: string): number | null {
+  if (/^kimi-k2\.5/i.test(modelName)) {
+    return 0.6;
+  }
 
-  return result;
+  if (/^(o1|o3|gpt-5|kimi-k2)/i.test(modelName)) {
+    return 1;
+  }
+
+  return null;
 }
 
 // limits the number of model responses that can be returned in a single request
