@@ -42,7 +42,7 @@ function parseCookies(cookieHeader: string): Record<string, string> {
 
 async function chatAction({ context, request }: ActionFunctionArgs) {
   const streamRecovery = new StreamRecoveryManager({
-    timeout: 300000,
+    timeout: 600000,
     maxRetries: 2,
     onTimeout: () => {
       logger.warn('Stream timeout - attempting recovery');
@@ -97,6 +97,8 @@ async function chatAction({ context, request }: ActionFunctionArgs) {
     const dataStream = createDataStream({
       async execute(dataStream) {
         streamRecovery.startMonitoring();
+        builtinToolService.setDataStream(dataStream);
+        builtinToolService.setKeepAlive(() => streamRecovery.updateActivity());
 
         const filePaths = getFilePaths(files || {});
         let filteredFiles: FileMap | undefined = undefined;
@@ -117,7 +119,7 @@ async function chatAction({ context, request }: ActionFunctionArgs) {
             label: 'summary',
             status: 'in-progress',
             order: progressCounter++,
-            message: 'Analysing Request',
+            message: 'Analyse de votre demande...',
           } satisfies ProgressAnnotation);
 
           // Create a summary of the chat
@@ -144,7 +146,7 @@ async function chatAction({ context, request }: ActionFunctionArgs) {
             label: 'summary',
             status: 'complete',
             order: progressCounter++,
-            message: 'Analysis Complete',
+            message: 'Analyse terminée',
           } satisfies ProgressAnnotation);
 
           dataStream.writeMessageAnnotation({
@@ -160,7 +162,7 @@ async function chatAction({ context, request }: ActionFunctionArgs) {
             label: 'context',
             status: 'in-progress',
             order: progressCounter++,
-            message: 'Determining Files to Read',
+            message: 'Sélection des fichiers pertinents...',
           } satisfies ProgressAnnotation);
 
           // Select context files
@@ -206,7 +208,7 @@ async function chatAction({ context, request }: ActionFunctionArgs) {
             label: 'context',
             status: 'complete',
             order: progressCounter++,
-            message: 'Code Files Selected',
+            message: 'Fichiers sélectionnés',
           } satisfies ProgressAnnotation);
 
           // logger.debug('Code Files Selected');
@@ -259,7 +261,7 @@ async function chatAction({ context, request }: ActionFunctionArgs) {
             }
           },
           onFinish: async ({ text: content, finishReason, usage }) => {
-            logger.debug('usage', JSON.stringify(usage));
+            logger.info(`finishReason: ${finishReason}, completionTokens: ${usage?.completionTokens}, content tail: ${content?.slice(-200)}`);
 
             if (usage) {
               cumulativeUsage.completionTokens += usage.completionTokens || 0;
@@ -281,7 +283,7 @@ async function chatAction({ context, request }: ActionFunctionArgs) {
                 label: 'response',
                 status: 'complete',
                 order: progressCounter++,
-                message: 'Response Generated',
+                message: 'Réponse générée',
               } satisfies ProgressAnnotation);
               await new Promise((resolve) => setTimeout(resolve, 0));
 
@@ -344,7 +346,7 @@ async function chatAction({ context, request }: ActionFunctionArgs) {
           label: 'response',
           status: 'in-progress',
           order: progressCounter++,
-          message: 'Generating Response',
+          message: 'Génération de la réponse...',
         } satisfies ProgressAnnotation);
 
         const result = await streamText({

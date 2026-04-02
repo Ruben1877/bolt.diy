@@ -30,6 +30,8 @@ export class BuiltinToolService {
   private _projectFiles: FileMap = {};
   private _apiKeys: Record<string, string> = {};
   private _env: Env | undefined;
+  private _dataStream: DataStreamWriter | undefined;
+  private _keepAlive: (() => void) | undefined;
 
   static getInstance(): BuiltinToolService {
     if (!BuiltinToolService._instance) {
@@ -45,6 +47,14 @@ export class BuiltinToolService {
     this._apiKeys = apiKeys;
     this._env = env;
     this._registerAllTools();
+  }
+
+  setDataStream(dataStream: DataStreamWriter) {
+    this._dataStream = dataStream;
+  }
+
+  setKeepAlive(keepAlive: () => void) {
+    this._keepAlive = keepAlive;
   }
 
   private _registerAllTools() {
@@ -71,6 +81,8 @@ export class BuiltinToolService {
       stitch_design: createStitchDesignTool(
         () => this._apiKeys,
         () => this._env,
+        () => this._dataStream,
+        () => this._keepAlive,
       ),
     };
 

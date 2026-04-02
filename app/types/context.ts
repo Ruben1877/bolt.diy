@@ -46,4 +46,6 @@ export type DesignCardsAnnotation = {
     screenId?: string;
   }>;
   designSystem?: DesignSystemAnnotation;
+  loading?: boolean;
+  totalExpected?: number;
 };

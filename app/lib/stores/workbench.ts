@@ -575,6 +575,20 @@ export class WorkbenchStore {
 
       const doc = this.#editorStore.documents.get()[fullPath];
 
+      if (doc && !isStreaming && data.action.content) {
+        const existingContent = doc.value?.toString() ?? '';
+        const newContent = data.action.content;
+
+        if (existingContent.trim() === newContent.trim()) {
+          artifact.runner.actions.setKey(data.actionId, {
+            ...artifact.runner.actions.get()[data.actionId],
+            executed: true,
+            status: 'complete' as const,
+          });
+          return;
+        }
+      }
+
       if (!doc) {
         await artifact.runner.runAction(data, isStreaming);
       }

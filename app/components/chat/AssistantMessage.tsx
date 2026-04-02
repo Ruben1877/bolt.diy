@@ -98,9 +98,10 @@ export const AssistantMessage = memo(
       totalTokens: number;
     } = filteredAnnotations.find((annotation) => annotation.type === 'usage')?.value;
 
-    const designCards = filteredAnnotations.find(
+    const designCardsAll = filteredAnnotations.filter(
       (annotation) => annotation.type === 'designCards',
-    ) as DesignCardsAnnotation | undefined;
+    ) as DesignCardsAnnotation[];
+    const designCards = designCardsAll.length > 0 ? designCardsAll[designCardsAll.length - 1] : undefined;
 
     const toolInvocations = parts?.filter((part) => part.type === 'tool-invocation');
     const toolCallAnnotations = filteredAnnotations.filter(
@@ -185,7 +186,14 @@ export const AssistantMessage = memo(
           {content}
         </Markdown>
         {designCards && designCards.designs?.length > 0 && (
-          <DesignCards designs={designCards.designs} projectId={designCards.projectId} designSystem={designCards.designSystem} append={append} />
+          <DesignCards
+            designs={designCards.designs}
+            projectId={designCards.projectId}
+            designSystem={designCards.designSystem}
+            append={append}
+            loading={designCards.loading}
+            totalExpected={designCards.totalExpected}
+          />
         )}
         {toolInvocations && toolInvocations.length > 0 && (
           <ToolInvocations

@@ -172,30 +172,55 @@ export async function streamText(props: {
     systemPrompt = `${systemPrompt}
 
 <workspace_state>
-  CRITICAL: You are working inside an EXISTING project workspace. These files ALREADY EXIST on disk.
-  You are NOT starting from scratch. The user's project is LIVE and RUNNING.
+  ############################################################
+  #  ABSOLUTE RULE — NEVER REWRITE UNCHANGED FILES           #
+  ############################################################
 
-  TOTAL FILES IN WORKSPACE: ${totalFileCount}
-  PROJECT FILE TREE:
+  You are working inside an EXISTING project with ${totalFileCount} files ALREADY on disk.
+  The dev server is ALREADY running. The project is LIVE.
+
+  PROJECT FILE TREE (these files EXIST — do NOT recreate them):
   ${fileTree}
 
-  IMPORTANT RULES FOR MODIFICATIONS:
-  - The files listed above ALREADY EXIST. Do NOT recreate them unless the user explicitly asks to start over.
-  - When the user asks to MODIFY, FIX, or UPDATE something: output ONLY the file(s) that need changes.
-  - Do NOT output package.json, config files, or unchanged files.
-  - Do NOT re-run npm install unless you are adding a NEW dependency.
-  - Do NOT use <boltAction type="start"> unless the server is not running or you changed dependencies.
-  - If 1 file needs a 1-line fix, your artifact should contain ONLY that 1 file. Not 15 files.
-  - Think of yourself as editing a LIVE codebase, like a developer with VS Code open on this project.
+  ═══════════════════════════════════════════════════════════
+  MANDATORY RULES — VIOLATION = CRITICAL FAILURE
+  ═══════════════════════════════════════════════════════════
+
+  1. OUTPUT ONLY FILES THAT ACTUALLY CHANGE.
+     If the user asks to "fix bugs" or "add a footer", you output ONLY:
+       • The new file (e.g. Footer.tsx)
+       • Files that import it and need an updated import line (e.g. App.tsx)
+     You do NOT touch package.json, config files, index.html, index.css,
+     or any component that is NOT directly affected.
+
+  2. NEVER recreate a file with similar but reworded content.
+     If Services.tsx already has 87 lines and works, do NOT output a
+     new 41-line version. That DESTROYS the user's work.
+
+  3. NEVER output package.json, postcss.config.js, tailwind.config.ts,
+     vite.config.ts, tsconfig.json, index.html, or index.css UNLESS
+     you are adding a genuinely new dependency or config entry.
+
+  4. NEVER re-run "npm install" unless you added a NEW package.
+
+  5. NEVER use <boltAction type="start"> unless the server crashed
+     or you changed dependencies.
+
+  6. Count your file actions BEFORE outputting them. If you are about
+     to output more than 3 files for a simple fix, STOP and reconsider.
+     A footer addition = 2 files max (Footer.tsx + App.tsx).
+
+  THINK LIKE A SENIOR DEV: open only the files you need, make the
+  minimal surgical change, save, done. Do NOT rewrite the project.
+  ═══════════════════════════════════════════════════════════
 
   CONTEXT BUFFER (source code of relevant files for your reference):
   ---
   ${codeContext}
   ---
 
-  NOTE: The context buffer above contains a SUBSET of existing files selected as most relevant.
-  Other files exist in the workspace (see file tree above) but are not shown to save context space.
-  If you need to see a file not in the buffer, use search_files to find it before making changes.
+  Files not shown above still exist — see the file tree. Do NOT assume
+  they are missing. If you need to inspect one, use search_files first.
 </workspace_state>
     `;
 

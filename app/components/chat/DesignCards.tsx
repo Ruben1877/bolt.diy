@@ -14,6 +14,8 @@ interface DesignCardsProps {
   projectId?: string;
   designSystem?: unknown;
   append?: (message: Message) => void;
+  loading?: boolean;
+  totalExpected?: number;
 }
 
 function getHiResUrl(url: string): string {
@@ -32,7 +34,7 @@ function getThumbUrl(url: string): string {
   return url;
 }
 
-export const DesignCards = memo(({ designs: initialDesigns, projectId, append }: DesignCardsProps) => {
+export const DesignCards = memo(({ designs: initialDesigns, projectId, append, loading, totalExpected }: DesignCardsProps) => {
   const [designs, setDesigns] = useState(initialDesigns);
   const [currentIndex, setCurrentIndex] = useState(0);
   const [selectedOption, setSelectedOption] = useState<number | null>(null);
@@ -42,8 +44,16 @@ export const DesignCards = memo(({ designs: initialDesigns, projectId, append }:
   const [refining, setRefining] = useState(false);
   const refineInputRef = useRef<HTMLInputElement>(null);
 
+  const prevDesignsRef = useRef(initialDesigns);
+  if (initialDesigns !== prevDesignsRef.current && initialDesigns.length !== prevDesignsRef.current.length) {
+    prevDesignsRef.current = initialDesigns;
+    setDesigns(initialDesigns);
+    setImageLoaded({});
+  }
+
   const current = designs[currentIndex];
   const total = designs.length;
+  const pendingCount = loading && totalExpected ? Math.max(0, totalExpected - designs.length) : 0;
 
   const goTo = useCallback(
     (index: number) => {
@@ -288,8 +298,16 @@ export const DesignCards = memo(({ designs: initialDesigns, projectId, append }:
         </div>
       </div>
 
+      {/* Loading banner */}
+      {loading && (
+        <div className="flex items-center gap-2 px-3 py-2 rounded-lg bg-bolt-elements-background-depth-2 border border-bolt-elements-borderColor text-xs text-bolt-elements-textSecondary">
+          <div className="i-svg-spinners:90-ring-with-bg text-sm" />
+          <span>Génération des variantes en cours… {designs.length}/{totalExpected || '?'} prêtes</span>
+        </div>
+      )}
+
       {/* Thumbnails */}
-      {total > 1 && !selectedOption && (
+      {(total > 1 || pendingCount > 0) && !selectedOption && (
         <div className="flex gap-2">
           {designs.map((d, i) => (
             <button
@@ -312,6 +330,16 @@ export const DesignCards = memo(({ designs: initialDesigns, projectId, append }:
                 />
               </div>
             </button>
+          ))}
+          {Array.from({ length: pendingCount }).map((_, i) => (
+            <div
+              key={`skeleton-${i}`}
+              className="flex-1 rounded-lg overflow-hidden border border-bolt-elements-borderColor"
+            >
+              <div className="aspect-[16/10] bg-bolt-elements-background-depth-2 animate-pulse flex items-center justify-center">
+                <div className="i-svg-spinners:90-ring-with-bg text-lg text-bolt-elements-textTertiary/40" />
+              </div>
+            </div>
           ))}
         </div>
       )}

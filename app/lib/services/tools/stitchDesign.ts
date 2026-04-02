@@ -467,11 +467,11 @@ async function findAwardWinningSites(
           body: JSON.stringify({
             api_key: tavilyKey,
             query,
-            max_results: 5,
+            max_results: 3,
             include_answer: false,
             include_raw_content: false,
           }),
-          signal: AbortSignal.timeout(8000),
+          signal: AbortSignal.timeout(5000),
         });
 
         if (!resp.ok) return [];
@@ -555,7 +555,7 @@ async function collectScreenshots(
       try {
         const resp = await fetch(r.screenshotUrl, {
           method: 'HEAD',
-          signal: AbortSignal.timeout(8000),
+          signal: AbortSignal.timeout(4000),
         });
 
         if (resp.ok || resp.status === 301 || resp.status === 302) {
@@ -576,7 +576,7 @@ async function collectScreenshots(
 async function fetchScreenshotAsBase64(screenshotUrl: string): Promise<string | null> {
   try {
     const resp = await fetch(screenshotUrl, {
-      signal: AbortSignal.timeout(30000),
+      signal: AbortSignal.timeout(15000),
     });
 
     if (!resp.ok) {
@@ -708,11 +708,11 @@ async function fetchDesignReferences(
         body: JSON.stringify({
           api_key: tavilyKey,
           query,
-          max_results: 4,
+          max_results: 3,
           include_answer: false,
           include_raw_content: false,
         }),
-        signal: AbortSignal.timeout(8000),
+        signal: AbortSignal.timeout(5000),
       });
 
       if (!resp.ok) {
@@ -1032,6 +1032,8 @@ function extractProjectId(data: any): string | null {
 export function createStitchDesignTool(
   getApiKeys: () => Record<string, string>,
   getEnv: () => Env | undefined,
+  getDataStream?: () => import('ai').DataStreamWriter | undefined,
+  getKeepAlive?: () => (() => void) | undefined,
 ) {
   return tool({
     description:
@@ -1064,7 +1066,43 @@ export function createStitchDesignTool(
     execute: async ({ niche, business_name, colors, typography_style, style_description, reference_urls }) => {
       logger.info(`Stitch design: niche="${niche}", business="${business_name || 'unnamed'}"`);
 
+      const ds = getDataStream?.();
+      const keepAlive = getKeepAlive?.();
+      let progressOrder = 100;
+
+      const emitProgress = (label: string, status: 'in-progress' | 'complete', message: string) => {
+        try {
+          ds?.writeData({ type: 'progress', label, status, order: progressOrder++, message });
+          keepAlive?.();
+        } catch { /* stream may be closed */ }
+      };
+
+      const withHeartbeat = async <T>(promise: Promise<T>, intervalMs = 30_000): Promise<T> => {
+        const timer = setInterval(() => { keepAlive?.(); }, intervalMs);
+
+        try {
+          return await promise;
+        } finally {
+          clearInterval(timer);
+        }
+      };
+
+      const emitDesignCards = (designs: DesignResult[], projectId?: string, designSys?: DesignSystemResult, loading?: boolean, totalExpected?: number) => {
+        try {
+          ds?.writeMessageAnnotation({
+            type: 'designCards' as const,
+            designs: designs as unknown as import('ai').JSONValue[],
+            ...(projectId ? { projectId } : {}),
+            ...(designSys ? { designSystem: designSys as unknown as Record<string, import('ai').JSONValue> } : {}),
+            ...(loading !== undefined ? { loading } : {}),
+            ...(totalExpected !== undefined ? { totalExpected } : {}),
+          } as import('ai').JSONValue);
+        } catch { /* stream may be closed */ }
+      };
+
       const designSystem = buildDesignSystem(business_name || niche, niche, colors, typography_style);
+      let didEmitLoadingCards = false;
+      let lastEmittedBaseDesigns: DesignResult[] = [];
 
       const apiKeys = getApiKeys();
       const env = getEnv();
@@ -1083,7 +1121,9 @@ export function createStitchDesignTool(
 
         const tavilyKey = apiKeys?.TAVILY_API_KEY || (env as unknown as Record<string, string>)?.TAVILY_API_KEY;
 
-        const [projectRaw, designRefs, screenshots] = await Promise.all([
+        emitProgress('stitch', 'in-progress', 'Analyse du projet et recherche d\'inspiration...');
+
+        const [projectRaw, designRefs, screenshots, brief] = await Promise.all([
           (async () => {
             const title = business_name || `${niche} website`;
             logger.info(`Creating Stitch project: "${title}"`);
@@ -1091,6 +1131,7 @@ export function createStitchDesignTool(
           })(),
           fetchDesignReferences(niche, tavilyKey || undefined),
           collectScreenshots(niche, typography_style, reference_urls, tavilyKey || undefined),
+          (async () => buildCreativeBrief(niche, business_name, colors, typography_style, style_description, []))(),
         ]);
 
         const projectId = extractProjectId(projectRaw);
@@ -1101,7 +1142,11 @@ export function createStitchDesignTool(
           throw new Error(`Could not extract projectId from: ${JSON.stringify(projectRaw).slice(0, 300)}`);
         }
 
-        const brief = buildCreativeBrief(niche, business_name, colors, typography_style, style_description, designRefs);
+        emitProgress('stitch', 'in-progress', 'Références collectées, génération du design principal...');
+
+        const briefWithRefs = designRefs.length > 0
+          ? buildCreativeBrief(niche, business_name, colors, typography_style, style_description, designRefs)
+          : brief;
 
         // Strategy: try generate_screen_from_image with a real website screenshot first,
         // fall back to generate_screen_from_text if no screenshot or if image tool fails
@@ -1120,7 +1165,7 @@ export function createStitchDesignTool(
               logger.info(`Screenshot fetched as base64 (${Math.round(base64Data.length / 1024)}KB), calling generate_screen_from_image...`);
 
               const imagePrompt = [
-                brief,
+                briefWithRefs,
                 '',
                 `RÉFÉRENCE VISUELLE PRINCIPALE :`,
                 `Ce screenshot provient de ${bestScreenshot.sourceUrl}.`,
@@ -1134,13 +1179,13 @@ export function createStitchDesignTool(
                 '- Le résultat final doit être SUPÉRIEUR visuellement à cette référence — plus moderne, plus soigné, plus cohérent',
               ].join('\n');
 
-              screenRaw = await callStitchMCP(stitchKey, 'generate_screen_from_image', {
+              screenRaw = await withHeartbeat(callStitchMCP(stitchKey, 'generate_screen_from_image', {
                 projectId,
                 imageUri: base64Data,
                 prompt: imagePrompt,
                 deviceType: 'DESKTOP',
                 modelId: 'GEMINI_3_1_PRO',
-              });
+              }));
               usedImageRef = true;
               logger.info('generate_screen_from_image succeeded!');
             }
@@ -1151,7 +1196,7 @@ export function createStitchDesignTool(
         }
 
         if (!screenRaw) {
-          let enhancedBrief = brief;
+          let enhancedBrief = briefWithRefs;
 
           if (screenshots.length > 0) {
             const screenshotRefs = screenshots
@@ -1169,12 +1214,12 @@ export function createStitchDesignTool(
           }
 
           logger.info(`Generating base screen via text prompt...`);
-          screenRaw = await callStitchMCP(stitchKey, 'generate_screen_from_text', {
+          screenRaw = await withHeartbeat(callStitchMCP(stitchKey, 'generate_screen_from_text', {
             projectId,
             prompt: enhancedBrief,
             deviceType: 'DESKTOP',
             modelId: 'GEMINI_3_1_PRO',
-          });
+          }));
         }
         logger.debug(`Screen raw (full): ${JSON.stringify(screenRaw).slice(0, 3000)}`);
         logger.debug(`Screen raw keys: ${JSON.stringify(Object.keys(screenRaw || {}))}`);
@@ -1212,6 +1257,48 @@ export function createStitchDesignTool(
           throw new Error(`Could not extract screenId from: ${JSON.stringify(screenRaw).slice(0, 300)}`);
         }
 
+        // Emit base screen immediately so the user sees something right away
+        {
+          let baseImageUrl = '';
+          let baseHtmlUrl = '';
+
+          if (screenRaw?.screenshot?.downloadUrl) {
+            baseImageUrl = screenRaw.screenshot.downloadUrl;
+          } else if (screenRaw?.screenshot?.imageUri) {
+            baseImageUrl = screenRaw.screenshot.imageUri;
+          } else if (screenRaw?.thumbnailScreenshot?.downloadUrl) {
+            baseImageUrl = screenRaw.thumbnailScreenshot.downloadUrl;
+          }
+
+          if (screenRaw?.htmlCode?.downloadUrl) {
+            baseHtmlUrl = screenRaw.htmlCode.downloadUrl;
+          } else if (screenRaw?.html?.htmlUri) {
+            baseHtmlUrl = screenRaw.html.htmlUri;
+          }
+
+          if (!baseImageUrl && screenRaw?.outputComponents) {
+            for (const comp of screenRaw.outputComponents) {
+              const s = comp?.design?.screens?.[0] || comp?.screens?.[0] || comp?.screen;
+              if (s?.screenshot?.downloadUrl) { baseImageUrl = s.screenshot.downloadUrl; break; }
+              if (s?.screenshot?.imageUri) { baseImageUrl = s.screenshot.imageUri; break; }
+              if (s?.thumbnailScreenshot?.downloadUrl) { baseImageUrl = s.thumbnailScreenshot.downloadUrl; break; }
+            }
+          }
+
+          if (baseImageUrl || baseHtmlUrl) {
+            lastEmittedBaseDesigns = [{ option: 1, title: 'Design principal', imageUrl: baseImageUrl, htmlUrl: baseHtmlUrl, screenId: baseScreenId }];
+            emitDesignCards(
+              lastEmittedBaseDesigns,
+              projectId,
+              designSystem,
+              true,
+              4,
+            );
+            didEmitLoadingCards = true;
+            emitProgress('stitch', 'in-progress', 'Premier design prêt ! Génération des variantes...');
+          }
+        }
+
         // Try to create and apply a native Stitch design system for consistency across variants
         let stitchDesignSystemId: string | null = null;
 
@@ -1244,11 +1331,13 @@ export function createStitchDesignTool(
           logger.warn(`Design system creation skipped: ${dsErr instanceof Error ? dsErr.message : dsErr}`);
         }
 
+        emitProgress('stitch', 'in-progress', 'Création des 4 variantes de design...');
+
         logger.info('Generating 4 design variants (REIMAGINE)...');
         const variantArgs = {
           projectId,
           selectedScreenIds: [baseScreenId],
-          prompt: brief,
+          prompt: briefWithRefs,
           variantOptions: {
             variantCount: 4,
             creativeRange: 'REIMAGINE',
@@ -1258,7 +1347,7 @@ export function createStitchDesignTool(
           modelId: 'GEMINI_3_1_PRO',
         };
         logger.debug(`generate_variants args: ${JSON.stringify(variantArgs).slice(0, 1000)}`);
-        const variantsRaw = await callStitchMCP(stitchKey, 'generate_variants', variantArgs);
+        const variantsRaw = await withHeartbeat(callStitchMCP(stitchKey, 'generate_variants', variantArgs));
         logger.debug(`Variants raw (full): ${JSON.stringify(variantsRaw).slice(0, 3000)}`);
         logger.debug(`Variants raw keys: ${JSON.stringify(Object.keys(variantsRaw || {}))}`);
 
@@ -1370,12 +1459,19 @@ export function createStitchDesignTool(
         }
 
         if (designs.length === 0) {
+          if (didEmitLoadingCards) {
+            emitDesignCards(lastEmittedBaseDesigns, undefined, designSystem, false);
+          }
+
           return {
             success: false,
             designSystem,
             message: 'Stitch generated designs but failed to retrieve screenshots/HTML.',
           };
         }
+
+        emitDesignCards(designs, projectId, designSystem, false);
+        emitProgress('stitch', 'complete', `${designs.length} designs générés avec succès`);
 
         return {
           success: true,
@@ -1400,6 +1496,10 @@ export function createStitchDesignTool(
       } catch (error: unknown) {
         const message = error instanceof Error ? error.message : String(error);
         logger.error(`Stitch design generation failed: ${message}`);
+
+        if (didEmitLoadingCards) {
+          emitDesignCards(lastEmittedBaseDesigns, undefined, designSystem, false);
+        }
 
         return {
           success: false,
