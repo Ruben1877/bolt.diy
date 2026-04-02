@@ -22,22 +22,14 @@ const messageParser = new EnhancedStreamingMessageParser({
     onActionOpen: (data) => {
       logger.trace('onActionOpen', data.action);
 
-      /*
-       * File actions are streamed, so we add them immediately to show progress
-       * Shell actions are complete when created by enhanced parser, so we wait for close
-       */
-      if (data.action.type === 'file') {
+      if (data.action.type === 'file' || data.action.type === 'replace') {
         workbenchStore.addAction(data);
       }
     },
     onActionClose: (data) => {
       logger.trace('onActionClose', data.action);
 
-      /*
-       * Add non-file actions (shell, build, start, etc.) when they close
-       * Enhanced parser creates complete shell actions, so they're ready to execute
-       */
-      if (data.action.type !== 'file') {
+      if (data.action.type !== 'file' && data.action.type !== 'replace') {
         workbenchStore.addAction(data);
       }
 

@@ -565,12 +565,6 @@ export class WorkbenchStore {
       const wc = await webcontainer;
       const fullPath = path.join(wc.workdir, data.action.filePath);
 
-      /*
-       * For scoped locks, we would need to implement diff checking here
-       * to determine if the AI is modifying existing code or just adding new code
-       * This is a more complex feature that would be implemented in a future update
-       */
-
       if (this.selectedFile.value !== fullPath) {
         this.setSelectedFile(fullPath);
       }
@@ -593,6 +587,32 @@ export class WorkbenchStore {
 
       if (!isStreaming) {
         await artifact.runner.runAction(data);
+        this.resetAllFileModifications();
+      }
+    } else if (data.action.type === 'replace') {
+      const wc = await webcontainer;
+      const fullPath = path.join(wc.workdir, data.action.filePath);
+
+      if (this.selectedFile.value !== fullPath) {
+        this.setSelectedFile(fullPath);
+      }
+
+      if (this.currentView.value !== 'code') {
+        this.currentView.set('code');
+      }
+
+      if (!isStreaming) {
+        await artifact.runner.runAction(data);
+
+        try {
+          const relativePath = path.relative(wc.workdir, fullPath);
+          const updatedContent = await wc.fs.readFile(relativePath, 'utf-8');
+          this.#editorStore.updateFile(fullPath, updatedContent);
+          await this.saveFile(fullPath);
+        } catch {
+          // file read failed, editor will stay as-is
+        }
+
         this.resetAllFileModifications();
       }
     } else {

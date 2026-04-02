@@ -69,6 +69,7 @@ export const Preview = memo(({ setSelectedElement }: PreviewProps) => {
   const [isDeviceModeOn, setIsDeviceModeOn] = useState(false);
   const [widthPercent, setWidthPercent] = useState<number>(37.5);
   const [currentWidth, setCurrentWidth] = useState<number>(0);
+  const [devicePreset, setDevicePreset] = useState<'desktop' | 'tablet' | 'mobile'>('desktop');
 
   const resizingState = useRef({
     isResizing: false,
@@ -714,31 +715,61 @@ export const Preview = memo(({ setSelectedElement }: PreviewProps) => {
           />
         </div>
 
-        <div className="flex items-center gap-2">
-          <IconButton
-            icon="i-ph:devices"
-            onClick={toggleDeviceMode}
-            title={isDeviceModeOn ? 'Switch to Responsive Mode' : 'Switch to Device Mode'}
-          />
+        <div className="flex items-center gap-1">
+          <div className="flex items-center bg-bolt-elements-background-depth-3 rounded-lg p-0.5 gap-0.5">
+            <button
+              onClick={() => {
+                setDevicePreset('desktop');
+                setIsDeviceModeOn(false);
+              }}
+              className={`flex items-center gap-1 px-2 py-1 rounded-md text-xs font-medium transition-all duration-200 ${
+                devicePreset === 'desktop'
+                  ? 'bg-bolt-elements-background-depth-1 text-bolt-elements-textPrimary shadow-sm'
+                  : 'text-bolt-elements-textTertiary hover:text-bolt-elements-textSecondary'
+              }`}
+              title="Desktop (100%)"
+            >
+              <div className="i-ph:monitor w-3.5 h-3.5" />
+            </button>
+            <button
+              onClick={() => {
+                setDevicePreset('tablet');
+                setIsDeviceModeOn(true);
+                setShowDeviceFrameInPreview(false);
+                setIsLandscape(false);
+              }}
+              className={`flex items-center gap-1 px-2 py-1 rounded-md text-xs font-medium transition-all duration-200 ${
+                devicePreset === 'tablet'
+                  ? 'bg-bolt-elements-background-depth-1 text-bolt-elements-textPrimary shadow-sm'
+                  : 'text-bolt-elements-textTertiary hover:text-bolt-elements-textSecondary'
+              }`}
+              title="Tablet (768px)"
+            >
+              <div className="i-ph:device-tablet w-3.5 h-3.5" />
+            </button>
+            <button
+              onClick={() => {
+                setDevicePreset('mobile');
+                setIsDeviceModeOn(true);
+                setShowDeviceFrameInPreview(false);
+                setIsLandscape(false);
+              }}
+              className={`flex items-center gap-1 px-2 py-1 rounded-md text-xs font-medium transition-all duration-200 ${
+                devicePreset === 'mobile'
+                  ? 'bg-bolt-elements-background-depth-1 text-bolt-elements-textPrimary shadow-sm'
+                  : 'text-bolt-elements-textTertiary hover:text-bolt-elements-textSecondary'
+              }`}
+              title="Mobile (375px)"
+            >
+              <div className="i-ph:device-mobile w-3.5 h-3.5" />
+            </button>
+          </div>
+
+          <div className="w-px h-4 bg-bolt-elements-borderColor mx-1" />
 
           {expoUrl && <IconButton icon="i-ph:qr-code" onClick={() => setIsExpoQrModalOpen(true)} title="Show QR" />}
 
           <ExpoQrModal open={isExpoQrModalOpen} onClose={() => setIsExpoQrModalOpen(false)} />
-
-          {isDeviceModeOn && (
-            <>
-              <IconButton
-                icon="i-ph:device-rotate"
-                onClick={() => setIsLandscape(!isLandscape)}
-                title={isLandscape ? 'Switch to Portrait' : 'Switch to Landscape'}
-              />
-              <IconButton
-                icon={showDeviceFrameInPreview ? 'i-ph:device-mobile' : 'i-ph:device-mobile-slash'}
-                onClick={() => setShowDeviceFrameInPreview(!showDeviceFrameInPreview)}
-                title={showDeviceFrameInPreview ? 'Hide Device Frame' : 'Show Device Frame'}
-              />
-            </>
-          )}
           <IconButton
             icon="i-ph:cursor-click"
             onClick={toggleInspectorMode}
@@ -900,7 +931,19 @@ export const Preview = memo(({ setSelectedElement }: PreviewProps) => {
       <div className="flex-1 border-t border-bolt-elements-borderColor flex justify-center items-center overflow-auto">
         <div
           style={{
-            width: isDeviceModeOn ? (showDeviceFrameInPreview ? '100%' : `${widthPercent}%`) : '100%',
+            width:
+              devicePreset === 'desktop'
+                ? '100%'
+                : devicePreset === 'tablet'
+                  ? '768px'
+                  : devicePreset === 'mobile'
+                    ? '375px'
+                    : isDeviceModeOn
+                      ? showDeviceFrameInPreview
+                        ? '100%'
+                        : `${widthPercent}%`
+                      : '100%',
+            maxWidth: '100%',
             height: '100%',
             overflow: 'auto',
             background: 'var(--bolt-elements-background-depth-1)',
@@ -908,6 +951,13 @@ export const Preview = memo(({ setSelectedElement }: PreviewProps) => {
             display: 'flex',
             justifyContent: 'center',
             alignItems: 'center',
+            transition: devicePreset !== 'desktop' ? 'width 0.3s ease' : 'none',
+            ...(devicePreset !== 'desktop'
+              ? {
+                  borderLeft: '1px solid var(--bolt-elements-borderColor)',
+                  borderRight: '1px solid var(--bolt-elements-borderColor)',
+                }
+              : {}),
           }}
         >
           {activePreview ? (

@@ -8,7 +8,7 @@ import { useMessageParser, usePromptEnhancer, useShortcuts } from '~/lib/hooks';
 import { description, useChatHistory } from '~/lib/persistence';
 import { chatStore } from '~/lib/stores/chat';
 import { workbenchStore } from '~/lib/stores/workbench';
-import { DEFAULT_MODEL, DEFAULT_PROVIDER, PROMPT_COOKIE_KEY, PROVIDER_LIST } from '~/utils/constants';
+import { DEFAULT_MODEL, DEFAULT_PROVIDER, PROMPT_COOKIE_KEY, PROVIDER_LIST, WORK_DIR } from '~/utils/constants';
 import { cubicEasingFn } from '~/utils/easings';
 import { createScopedLogger, renderLogger } from '~/utils/logger';
 import { BaseChat } from './BaseChat';
@@ -30,6 +30,16 @@ import { useMCPStore } from '~/lib/stores/mcp';
 import type { LlmErrorAlertType } from '~/types/actions';
 
 const logger = createScopedLogger('Chat');
+
+function sanitizeFileName(name: string): string {
+  return name
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .replace(/[^a-zA-Z0-9._-]/g, '-')
+    .replace(/-+/g, '-')
+    .replace(/^-|-$/g, '')
+    .toLowerCase();
+}
 
 export function Chat() {
   renderLogger.trace('Chat');
@@ -89,6 +99,8 @@ export const ChatImpl = memo(
     const [chatStarted, setChatStarted] = useState(initialMessages.length > 0);
     const [uploadedFiles, setUploadedFiles] = useState<File[]>([]);
     const [imageDataList, setImageDataList] = useState<string[]>([]);
+    const [uploadedImagePaths, setUploadedImagePaths] = useState<string[]>([]);
+    const pendingImagesRef = useRef<Array<{ name: string; data: string }>>([]);
     const [searchParams, setSearchParams] = useSearchParams();
     const [fakeLoading, setFakeLoading] = useState(false);
     const files = useStore(workbenchStore.files);
@@ -359,6 +371,87 @@ export const ChatImpl = memo(
       return parts;
     };
 
+    const writeImagesToWebContainer = useCallback(
+      async (files: File[], dataList: string[]): Promise<string[]> => {
+        const paths: string[] = [];
+        const filesMap = workbenchStore.files.get();
+        const hasProject = Object.keys(filesMap).length > 0;
+
+        for (let i = 0; i < files.length; i++) {
+          const file = files[i];
+          const base64Data = dataList[i];
+
+          if (!file || !base64Data) {
+            continue;
+          }
+
+          const ext = file.name.includes('.') ? file.name.split('.').pop() : 'jpg';
+          const baseName = file.name.includes('.') ? file.name.slice(0, file.name.lastIndexOf('.')) : file.name;
+          const slug = sanitizeFileName(baseName);
+          const ts = Date.now().toString(36).slice(-4);
+          const filename = `${slug}-${ts}.${ext}`;
+          const webPath = `/images/${filename}`;
+
+          if (!hasProject) {
+            pendingImagesRef.current.push({ name: filename, data: base64Data });
+            paths.push(webPath);
+            continue;
+          }
+
+          try {
+            const raw = base64Data.replace(/^data:[^;]+;base64,/, '');
+            const binaryStr = atob(raw);
+            const bytes = new Uint8Array(binaryStr.length);
+
+            for (let j = 0; j < binaryStr.length; j++) {
+              bytes[j] = binaryStr.charCodeAt(j);
+            }
+
+            await workbenchStore.createFile(`${WORK_DIR}/public/images/${filename}`, bytes);
+            paths.push(webPath);
+          } catch (err) {
+            logger.error('Failed to write image to WebContainer', err);
+          }
+        }
+
+        return paths;
+      },
+      [],
+    );
+
+    const flushPendingImages = useCallback(async () => {
+      if (pendingImagesRef.current.length === 0) {
+        return;
+      }
+
+      const pending = [...pendingImagesRef.current];
+      pendingImagesRef.current = [];
+
+      for (const { name, data } of pending) {
+        try {
+          const raw = data.replace(/^data:[^;]+;base64,/, '');
+          const binaryStr = atob(raw);
+          const bytes = new Uint8Array(binaryStr.length);
+
+          for (let j = 0; j < binaryStr.length; j++) {
+            bytes[j] = binaryStr.charCodeAt(j);
+          }
+
+          await workbenchStore.createFile(`${WORK_DIR}/public/images/${name}`, bytes);
+        } catch (err) {
+          logger.error('Failed to flush pending image', err);
+        }
+      }
+    }, []);
+
+    useEffect(() => {
+      const filesMap = workbenchStore.files.get();
+
+      if (Object.keys(filesMap).length > 0 && pendingImagesRef.current.length > 0) {
+        flushPendingImages();
+      }
+    }, [files, flushPendingImages]);
+
     // Helper function to convert File[] to Attachment[] for AI SDK
     const filesToAttachments = async (files: File[]): Promise<Attachment[] | undefined> => {
       if (files.length === 0) {
@@ -398,13 +491,25 @@ export const ChatImpl = memo(
         return;
       }
 
+      // Batch-write uploaded images to WebContainer before sending
+      let imagePaths: string[] = [];
+
+      if (uploadedFiles.length > 0 && imageDataList.length > 0) {
+        imagePaths = await writeImagesToWebContainer(uploadedFiles, imageDataList);
+        setUploadedImagePaths((prev) => [...prev, ...imagePaths]);
+      }
+
       let finalMessageContent = messageContent;
+
+      if (imagePaths.length > 0) {
+        finalMessageContent += `\n\n[User uploaded images available at: ${imagePaths.join(', ')}]\nUse these paths directly in <img> tags and CSS background-image properties.`;
+      }
 
       if (selectedElement) {
         console.log('Selected Element:', selectedElement);
 
         const elementInfo = `<div class=\"__boltSelectedElement__\" data-element='${JSON.stringify(selectedElement)}'>${JSON.stringify(`${selectedElement.displayText}`)}</div>`;
-        finalMessageContent = messageContent + elementInfo;
+        finalMessageContent = finalMessageContent + elementInfo;
       }
 
       runAnimation();
@@ -476,7 +581,6 @@ export const ChatImpl = memo(
           }
         }
 
-        // If autoSelectTemplate is disabled or template selection failed, proceed with normal message
         const userMessageText = `[Model: ${model}]\n\n[Provider: ${provider.name}]\n\n${finalMessageContent}`;
         const attachments = uploadedFiles.length > 0 ? await filesToAttachments(uploadedFiles) : undefined;
 

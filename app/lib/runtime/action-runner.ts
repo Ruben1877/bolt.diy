@@ -1,7 +1,15 @@
 import type { WebContainer } from '@webcontainer/api';
 import { path as nodePath } from '~/utils/path';
 import { atom, map, type MapStore } from 'nanostores';
-import type { ActionAlert, BoltAction, DeployAlert, FileHistory, SupabaseAction, SupabaseAlert } from '~/types/actions';
+import type {
+  ActionAlert,
+  BoltAction,
+  DeployAlert,
+  FileHistory,
+  ReplaceAction,
+  SupabaseAction,
+  SupabaseAlert,
+} from '~/types/actions';
 import { createScopedLogger } from '~/utils/logger';
 import { unreachable } from '~/utils/unreachable';
 import type { ActionCallbackData } from './message-parser';
@@ -129,7 +137,7 @@ export class ActionRunner {
       return; // No return value here
     }
 
-    if (isStreaming && action.type !== 'file') {
+    if (isStreaming && action.type !== 'file' && action.type !== 'replace') {
       return; // No return value here
     }
 
@@ -161,6 +169,10 @@ export class ActionRunner {
         }
         case 'file': {
           await this.#runFileAction(action);
+          break;
+        }
+        case 'replace': {
+          await this.#runReplaceAction(action as ReplaceAction);
           break;
         }
         case 'supabase': {
@@ -335,6 +347,52 @@ export class ActionRunner {
       logger.debug(`File written ${relativePath}`);
     } catch (error) {
       logger.error('Failed to write file\n\n', error);
+    }
+  }
+
+  async #runReplaceAction(action: ReplaceAction) {
+    const webcontainer = await this.#webcontainer;
+    const relativePath = nodePath.relative(webcontainer.workdir, action.filePath);
+
+    let currentContent: string;
+
+    try {
+      currentContent = await webcontainer.fs.readFile(relativePath, 'utf-8');
+    } catch (error) {
+      logger.error(`Replace action: file not found ${relativePath}`, error);
+      throw new Error(`File not found for replace: ${relativePath}`);
+    }
+
+    let modified = currentContent;
+
+    for (const { search, replace } of action.replacements) {
+      if (!search || search.trim().length === 0) {
+        logger.warn('Replace action: skipping empty search string');
+        continue;
+      }
+
+      if (modified.includes(search)) {
+        const count = modified.split(search).length - 1;
+        modified = modified.split(search).join(replace);
+        logger.debug(`Replace action: replaced ${count} occurrence(s) of search string in ${relativePath}`);
+      } else {
+        const trimmedSearch = search.trim();
+
+        if (trimmedSearch.length > 0 && modified.includes(trimmedSearch)) {
+          const count = modified.split(trimmedSearch).length - 1;
+          modified = modified.split(trimmedSearch).join(replace.trim());
+          logger.debug(`Replace action: replaced ${count} trimmed occurrence(s) in ${relativePath}`);
+        } else {
+          logger.warn(`Replace action: search string not found in ${relativePath}`);
+        }
+      }
+    }
+
+    try {
+      await webcontainer.fs.writeFile(relativePath, modified);
+      logger.debug(`Replace action: ${action.replacements.length} replacement(s) applied to ${relativePath}`);
+    } catch (error) {
+      logger.error('Replace action: failed to write file\n\n', error);
     }
   }
 

@@ -7,7 +7,7 @@ import { PromptLibrary } from '~/lib/common/prompt-library';
 import { allowedHTMLElements } from '~/utils/markdown';
 import { LLMManager } from '~/lib/modules/llm/manager';
 import { createScopedLogger } from '~/utils/logger';
-import { createFilesContext, extractPropertiesFromMessage } from './utils';
+import { createFilesContext, createFileTreeListing, extractPropertiesFromMessage } from './utils';
 import { discussPrompt } from '~/lib/common/prompts/discuss-prompt';
 import type { DesignScheme } from '~/types/design-scheme';
 
@@ -165,13 +165,38 @@ export async function streamText(props: {
   if (chatMode === 'build' && contextFiles && contextOptimization) {
     const codeContext = createFilesContext(contextFiles, true);
 
+    const allFiles = files || contextFiles;
+    const fileTree = createFileTreeListing(allFiles);
+    const totalFileCount = Object.values(allFiles).filter((f) => f?.type === 'file').length;
+
     systemPrompt = `${systemPrompt}
 
-    Below is the artifact containing the context loaded into context buffer for you to have knowledge of and might need changes to fullfill current user request.
-    CONTEXT BUFFER:
-    ---
-    ${codeContext}
-    ---
+<workspace_state>
+  CRITICAL: You are working inside an EXISTING project workspace. These files ALREADY EXIST on disk.
+  You are NOT starting from scratch. The user's project is LIVE and RUNNING.
+
+  TOTAL FILES IN WORKSPACE: ${totalFileCount}
+  PROJECT FILE TREE:
+  ${fileTree}
+
+  IMPORTANT RULES FOR MODIFICATIONS:
+  - The files listed above ALREADY EXIST. Do NOT recreate them unless the user explicitly asks to start over.
+  - When the user asks to MODIFY, FIX, or UPDATE something: output ONLY the file(s) that need changes.
+  - Do NOT output package.json, config files, or unchanged files.
+  - Do NOT re-run npm install unless you are adding a NEW dependency.
+  - Do NOT use <boltAction type="start"> unless the server is not running or you changed dependencies.
+  - If 1 file needs a 1-line fix, your artifact should contain ONLY that 1 file. Not 15 files.
+  - Think of yourself as editing a LIVE codebase, like a developer with VS Code open on this project.
+
+  CONTEXT BUFFER (source code of relevant files for your reference):
+  ---
+  ${codeContext}
+  ---
+
+  NOTE: The context buffer above contains a SUBSET of existing files selected as most relevant.
+  Other files exist in the workspace (see file tree above) but are not shown to save context space.
+  If you need to see a file not in the buffer, use search_files to find it before making changes.
+</workspace_state>
     `;
 
     if (summary) {

@@ -1,7 +1,18 @@
 import { globSync } from 'fast-glob';
 import fs from 'node:fs/promises';
 import { basename } from 'node:path';
+import { createRequire } from 'node:module';
 import { defineConfig, presetIcons, presetUno, transformerDirectives } from 'unocss';
+
+const require = createRequire(import.meta.url);
+
+function loadIconCollection(name: string) {
+  try {
+    return require(`@iconify-json/${name}/icons.json`);
+  } catch {
+    return undefined;
+  }
+}
 
 const iconPaths = globSync('./icons/*.svg');
 
@@ -35,17 +46,17 @@ const BASE_COLORS = {
     950: '#0A0A0A',
   },
   accent: {
-    50: '#F8F5FF',
-    100: '#F0EBFF',
-    200: '#E1D6FF',
-    300: '#CEBEFF',
-    400: '#B69EFF',
-    500: '#9C7DFF',
-    600: '#8A5FFF',
-    700: '#7645E8',
-    800: '#6234BB',
-    900: '#502D93',
-    950: '#2D1959',
+    50: '#EEF2FF',
+    100: '#E0E7FF',
+    200: '#C7D2FE',
+    300: '#A5B4FC',
+    400: '#818CF8',
+    500: '#6366F1',
+    600: '#4F46E5',
+    700: '#4338CA',
+    800: '#3730A3',
+    900: '#312E81',
+    950: '#1E1B4B',
   },
   green: {
     50: '#F0FDF4',
@@ -241,6 +252,8 @@ export default defineConfig({
       warn: true,
       collections: {
         ...customIconCollection,
+        ph: () => loadIconCollection('ph'),
+        'svg-spinners': () => loadIconCollection('svg-spinners'),
       },
       unit: 'em',
     }),

@@ -25,12 +25,25 @@ export type ToolCallAnnotation = {
   toolDescription: string;
 };
 
+export type DesignSystemAnnotation = {
+  name: string;
+  palette: Array<{ label: string; hex: string }>;
+  typography: {
+    style: string;
+    fonts: string[];
+  };
+  features: string[];
+};
+
 export type DesignCardsAnnotation = {
   type: 'designCards';
+  projectId?: string;
   designs: Array<{
     option: number;
     title: string;
     imageUrl: string;
     htmlUrl: string;
+    screenId?: string;
   }>;
+  designSystem?: DesignSystemAnnotation;
 };

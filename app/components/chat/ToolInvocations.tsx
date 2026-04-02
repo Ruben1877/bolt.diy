@@ -70,6 +70,21 @@ function JsonCodeBlock({ className, code, theme }: JsonCodeBlockProps) {
   );
 }
 
+const BUILTIN_TOOL_NAMES = new Set([
+  'search_files',
+  'fetch_website',
+  'web_search',
+  'generate_image',
+  'security_scan',
+  'supabase_docs_search',
+  'design_inspiration',
+  'stitch_design',
+]);
+
+function isBuiltinTool(toolName: string, annotation?: ToolCallAnnotation): boolean {
+  return BUILTIN_TOOL_NAMES.has(toolName) || annotation?.serverName === 'builtin';
+}
+
 interface ToolInvocationsProps {
   toolInvocations: ToolInvocationUIPart[];
   toolCallAnnotations: ToolCallAnnotation[];
@@ -79,14 +94,45 @@ interface ToolInvocationsProps {
 export const ToolInvocations = memo(({ toolInvocations, toolCallAnnotations, addToolResult }: ToolInvocationsProps) => {
   const theme = useStore(themeStore);
   const [showDetails, setShowDetails] = useState(false);
+  const [autoApprovedIds] = useState<Set<string>>(() => new Set());
+
+  useEffect(() => {
+    for (const inv of toolInvocations) {
+      if (inv.toolInvocation.state !== 'call') {
+        continue;
+      }
+
+      const { toolCallId, toolName } = inv.toolInvocation;
+
+      if (autoApprovedIds.has(toolCallId)) {
+        continue;
+      }
+
+      const annotation = toolCallAnnotations.find((a) => a.toolCallId === toolCallId);
+
+      if (isBuiltinTool(toolName, annotation)) {
+        autoApprovedIds.add(toolCallId);
+        addToolResult({ toolCallId, result: TOOL_EXECUTION_APPROVAL.APPROVE });
+      }
+    }
+  }, [toolInvocations, toolCallAnnotations, addToolResult, autoApprovedIds]);
 
   const toggleDetails = () => {
     setShowDetails((prev) => !prev);
   };
 
-  const toolCalls = useMemo(
-    () => toolInvocations.filter((inv) => inv.toolInvocation.state === 'call'),
-    [toolInvocations],
+  const manualToolCalls = useMemo(
+    () =>
+      toolInvocations.filter((inv) => {
+        if (inv.toolInvocation.state !== 'call') {
+          return false;
+        }
+
+        const { toolName, toolCallId } = inv.toolInvocation;
+        const annotation = toolCallAnnotations.find((a) => a.toolCallId === toolCallId);
+        return !isBuiltinTool(toolName, annotation);
+      }),
+    [toolInvocations, toolCallAnnotations],
   );
 
   const toolResults = useMemo(
@@ -94,10 +140,10 @@ export const ToolInvocations = memo(({ toolInvocations, toolCallAnnotations, add
     [toolInvocations],
   );
 
-  const hasToolCalls = toolCalls.length > 0;
+  const hasManualToolCalls = manualToolCalls.length > 0;
   const hasToolResults = toolResults.length > 0;
 
-  if (!hasToolCalls && !hasToolResults) {
+  if (!hasManualToolCalls && !hasToolResults) {
     return null;
   }
 
@@ -143,7 +189,7 @@ export const ToolInvocations = memo(({ toolInvocations, toolCallAnnotations, add
         </AnimatePresence>
       </div>
       <AnimatePresence>
-        {hasToolCalls && (
+        {hasManualToolCalls && (
           <motion.div
             className="details"
             initial={{ height: 0 }}
@@ -155,7 +201,7 @@ export const ToolInvocations = memo(({ toolInvocations, toolCallAnnotations, add
 
             <div className="px-3 py-3 text-left bg-bolt-elements-background-depth-2">
               <ToolCallsList
-                toolInvocations={toolCalls}
+                toolInvocations={manualToolCalls}
                 toolCallAnnotations={toolCallAnnotations}
                 addToolResult={addToolResult}
                 theme={theme}
@@ -332,10 +378,24 @@ const ToolCallsList = memo(({ toolInvocations, toolCallAnnotations, addToolResul
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, [expanded, addToolResult, isMac]);
 
+  const manualToolInvocations = toolInvocations.filter((inv) => {
+    if (inv.toolInvocation.state !== 'call') {
+      return false;
+    }
+
+    const { toolName, toolCallId } = inv.toolInvocation;
+    const annotation = toolCallAnnotations.find((a) => a.toolCallId === toolCallId);
+    return !isBuiltinTool(toolName, annotation);
+  });
+
+  if (manualToolInvocations.length === 0) {
+    return null;
+  }
+
   return (
     <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} transition={{ duration: 0.15 }}>
       <ul className="list-none space-y-4">
-        {toolInvocations.map((tool, index) => {
+        {manualToolInvocations.map((tool, index) => {
           const toolCallState = tool.toolInvocation.state;
 
           if (toolCallState !== 'call') {

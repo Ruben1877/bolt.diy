@@ -54,6 +54,69 @@ export function simplifyBoltActions(input: string): string {
   });
 }
 
+export function createFileTreeListing(files: FileMap): string {
+  const ig = ignore().add(IGNORE_PATTERNS);
+  let filePaths = Object.keys(files)
+    .filter((x) => {
+      const relPath = x.replace('/home/project/', '');
+      return !ig.ignores(relPath);
+    })
+    .filter((x) => files[x] && files[x].type === 'file')
+    .map((x) => x.replace('/home/project/', ''))
+    .sort();
+
+  if (filePaths.length === 0) {
+    return '';
+  }
+
+  const tree: Record<string, any> = {};
+
+  for (const fp of filePaths) {
+    const parts = fp.split('/');
+    let current = tree;
+
+    for (let i = 0; i < parts.length; i++) {
+      const part = parts[i];
+
+      if (i === parts.length - 1) {
+        const entry = files[`/home/project/${fp}`];
+        const content = (entry && 'content' in entry ? entry.content : '') || '';
+        const lines = content.split('\n').length;
+        current[part] = lines;
+      } else {
+        if (!current[part] || typeof current[part] !== 'object') {
+          current[part] = {};
+        }
+
+        current = current[part];
+      }
+    }
+  }
+
+  function renderTree(node: Record<string, any>, prefix: string): string[] {
+    const entries = Object.entries(node);
+    const lines: string[] = [];
+
+    for (let i = 0; i < entries.length; i++) {
+      const [name, value] = entries[i];
+      const isLast = i === entries.length - 1;
+      const connector = isLast ? '└── ' : '├── ';
+      const childPrefix = isLast ? '    ' : '│   ';
+
+      if (typeof value === 'object') {
+        lines.push(`${prefix}${connector}${name}/`);
+        lines.push(...renderTree(value, prefix + childPrefix));
+      } else {
+        lines.push(`${prefix}${connector}${name} (${value}L)`);
+      }
+    }
+
+    return lines;
+  }
+
+  return renderTree(tree, '').join('\n');
+}
+
 export function createFilesContext(files: FileMap, useRelativePath?: boolean) {
   const ig = ignore().add(IGNORE_PATTERNS);
   let filePaths = Object.keys(files);

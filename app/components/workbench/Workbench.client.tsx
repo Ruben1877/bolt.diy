@@ -392,7 +392,7 @@ export const Workbench = memo(
             )}
           >
             <div className="absolute inset-0 px-2 lg:px-4">
-              <div className="h-full flex flex-col bg-bolt-elements-background-depth-2 border border-bolt-elements-borderColor shadow-sm rounded-lg overflow-hidden">
+              <div className="h-full flex flex-col bg-bolt-elements-background-depth-2 border border-bolt-elements-borderColor shadow-sm rounded-xl overflow-hidden">
                 <div className="flex items-center px-3 py-2 border-b border-bolt-elements-borderColor gap-1.5">
                   <button
                     className={`${showChat ? 'i-ph:sidebar-simple-fill' : 'i-ph:sidebar-simple'} text-lg text-bolt-elements-textSecondary mr-1`}
@@ -423,7 +423,7 @@ export const Workbench = memo(
                           <DropdownMenu.Content
                             className={classNames(
                               'min-w-[240px] z-[250]',
-                              'bg-white dark:bg-[#141414]',
+                              'bg-bolt-elements-background-depth-1',
                               'rounded-lg shadow-lg',
                               'border border-gray-200/50 dark:border-gray-800/50',
                               'animate-in fade-in-0 zoom-in-95',

@@ -3,7 +3,7 @@
  * Preventing TS checks with files presented in the video for a better presentation.
  */
 import type { JSONValue, Message } from 'ai';
-import React, { type RefCallback, useEffect, useState } from 'react';
+import React, { type RefCallback, useCallback, useEffect, useRef, useState } from 'react';
 import { ClientOnly } from 'remix-utils/client-only';
 import { Menu } from '~/components/sidebar/Menu.client';
 import { Workbench } from '~/components/workbench/Workbench.client';
@@ -14,11 +14,8 @@ import { getApiKeysFromCookies } from './APIKeyManager';
 import Cookies from 'js-cookie';
 import * as Tooltip from '@radix-ui/react-tooltip';
 import styles from './BaseChat.module.scss';
-import { ImportButtons } from '~/components/chat/chatExportAndImport/ImportButtons';
 import { ExamplePrompts } from '~/components/chat/ExamplePrompts';
-import GitCloneButton from './GitCloneButton';
 import type { ProviderInfo } from '~/types/model';
-import StarterTemplates from './StarterTemplates';
 import type { ActionAlert, SupabaseAlert, DeployAlert, LlmErrorAlertType } from '~/types/actions';
 import DeployChatAlert from '~/components/deploy/DeployAlert';
 import ChatAlert from './ChatAlert';
@@ -33,6 +30,7 @@ import { ChatBox } from './ChatBox';
 import type { DesignScheme } from '~/types/design-scheme';
 import type { ElementInfo } from '~/components/workbench/Inspector';
 import LlmErrorAlert from './LLMApiAlert';
+import { workbenchStore } from '~/lib/stores/workbench';
 
 const TEXTAREA_MIN_HEIGHT = 76;
 
@@ -145,6 +143,7 @@ export const BaseChat = React.forwardRef<HTMLDivElement, BaseChatProps>(
     const [isModelLoading, setIsModelLoading] = useState<string | undefined>('all');
     const [progressAnnotations, setProgressAnnotations] = useState<ProgressAnnotation[]>([]);
     const expoUrl = useStore(expoUrlAtom);
+    const showWorkbench = useStore(workbenchStore.showWorkbench);
     const [qrModalOpen, setQrModalOpen] = useState(false);
 
     useEffect(() => {
@@ -168,6 +167,46 @@ export const BaseChat = React.forwardRef<HTMLDivElement, BaseChatProps>(
     useEffect(() => {
       onStreamingChange?.(isStreaming);
     }, [isStreaming, onStreamingChange]);
+
+    const autoFixAttemptsRef = useRef<Map<string, number>>(new Map());
+    const autoFixGlobalCountRef = useRef(0);
+    const MAX_GLOBAL_AUTO_FIX = 5;
+    const MAX_PER_ERROR_AUTO_FIX = 2;
+
+    const autoFixError = useCallback(
+      (alert: ActionAlert) => {
+        if (autoFixGlobalCountRef.current >= MAX_GLOBAL_AUTO_FIX) {
+          console.log('[auto-fix] Global max reached — stopping auto-fix to prevent loop');
+          return;
+        }
+
+        const isPreview = alert.source === 'preview';
+        const errorContent = alert.content || alert.description || '';
+
+        const errorKey = errorContent.slice(0, 200);
+        const attempts = autoFixAttemptsRef.current.get(errorKey) || 0;
+
+        if (attempts >= MAX_PER_ERROR_AUTO_FIX) {
+          console.log('[auto-fix] Max attempts for this specific error, showing alert for manual intervention');
+          return;
+        }
+
+        autoFixAttemptsRef.current.set(errorKey, attempts + 1);
+        autoFixGlobalCountRef.current += 1;
+
+        const message = `*Auto-fix: corrige UNIQUEMENT cette erreur ${isPreview ? 'de preview' : 'de terminal'}. Utilise type="replace" pour modifier chirurgicalement le(s) fichier(s) concerné(s). Ne recrée PAS le projet entier.* \n\`\`\`${isPreview ? 'js' : 'sh'}\n${errorContent}\n\`\`\`\n`;
+        sendMessage?.({} as any, message);
+        clearAlert?.();
+      },
+      [sendMessage, clearAlert],
+    );
+
+    useEffect(() => {
+      if (actionAlert && !isStreaming) {
+        const timer = setTimeout(() => autoFixError(actionAlert), 1500);
+        return () => clearTimeout(timer);
+      }
+    }, [actionAlert, isStreaming, autoFixError]);
 
     useEffect(() => {
       if (typeof window !== 'undefined' && ('SpeechRecognition' in window || 'webkitSpeechRecognition' in window)) {
@@ -348,20 +387,43 @@ export const BaseChat = React.forwardRef<HTMLDivElement, BaseChatProps>(
         data-chat-visible={showChat}
       >
         <ClientOnly>{() => <Menu />}</ClientOnly>
-        <div className="flex flex-col lg:flex-row overflow-y-auto w-full h-full">
-          <div className={classNames(styles.Chat, 'flex flex-col flex-grow lg:min-w-[var(--chat-min-width)] h-full')}>
+        <div className="flex flex-col lg:flex-row overflow-y-auto overflow-x-hidden w-full h-full">
+          <div
+            className={classNames(styles.Chat, 'flex flex-col flex-grow lg:min-w-[var(--chat-min-width)] h-full overflow-hidden relative')}
+            style={showWorkbench ? { maxWidth: 'var(--workbench-left)' } : undefined}
+          >
             {!chatStarted && (
-              <div id="intro" className="mt-[16vh] max-w-2xl mx-auto text-center px-4 lg:px-0">
-                <h1 className="text-3xl lg:text-6xl font-bold text-bolt-elements-textPrimary mb-4 animate-fade-in">
-                  Where ideas begin
-                </h1>
-                <p className="text-md lg:text-xl mb-8 text-bolt-elements-textSecondary animate-fade-in animation-delay-200">
-                  Bring ideas to life in seconds or get help on existing projects.
-                </p>
-              </div>
+              <>
+                <video
+                  autoPlay
+                  loop
+                  muted
+                  playsInline
+                  preload="auto"
+                  className="absolute inset-0 w-full h-full object-cover z-0 pointer-events-none"
+                >
+                  <source src="/background-hd.mp4" type="video/mp4" />
+                </video>
+                <div id="intro" className="mt-[16vh] max-w-2xl mx-auto text-center px-4 lg:px-0 relative z-1">
+                  <div className="flex justify-center mb-6 animate-fade-in">
+                    <div className="w-14 h-14 rounded-2xl bg-accent-500 flex items-center justify-center shadow-lg shadow-accent-500/20">
+                      <svg width="28" height="28" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg">
+                        <path d="M4 12L8 4L12 12" stroke="white" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+                        <line x1="5.5" y1="9.5" x2="10.5" y2="9.5" stroke="white" strokeWidth="1.5" strokeLinecap="round" />
+                      </svg>
+                    </div>
+                  </div>
+                  <h1 className="text-3xl lg:text-5xl font-bold text-bolt-elements-textPrimary mb-3 animate-fade-in tracking-tight">
+                    Que voulez-vous créer ?
+                  </h1>
+                  <p className="text-sm lg:text-base text-bolt-elements-textTertiary animate-fade-in animation-delay-200 max-w-md mx-auto">
+                    Décrivez votre idée en quelques mots. AXTRAAI génère le code et le design pour vous.
+                  </p>
+                </div>
+              </>
             )}
             <StickToBottom
-              className={classNames('pt-6 px-2 sm:px-6 relative', {
+              className={classNames('pt-6 px-2 sm:px-6 relative z-1', {
                 'h-full flex flex-col modern-scrollbar': chatStarted,
               })}
               resize="smooth"
@@ -471,16 +533,10 @@ export const BaseChat = React.forwardRef<HTMLDivElement, BaseChatProps>(
                 />
               </div>
             </StickToBottom>
-            <div className="flex flex-col justify-center">
-              {!chatStarted && (
-                <div className="flex justify-center gap-2">
-                  {ImportButtons(importChat)}
-                  <GitCloneButton importChat={importChat} />
-                </div>
-              )}
-              <div className="flex flex-col gap-5">
-                {!chatStarted &&
-                  ExamplePrompts((event, messageInput) => {
+            {!chatStarted && (
+              <div className="flex flex-col items-center gap-3 pb-8 relative z-1">
+                <div className="flex flex-wrap justify-center gap-2 max-w-chat mx-auto">
+                  {ExamplePrompts((event, messageInput) => {
                     if (isStreaming) {
                       handleStop?.();
                       return;
@@ -488,9 +544,9 @@ export const BaseChat = React.forwardRef<HTMLDivElement, BaseChatProps>(
 
                     handleSendMessage?.(event, messageInput);
                   })}
-                {!chatStarted && <StarterTemplates />}
+                </div>
               </div>
-            </div>
+            )}
           </div>
           <ClientOnly>
             {() => (

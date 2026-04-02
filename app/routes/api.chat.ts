@@ -42,7 +42,7 @@ function parseCookies(cookieHeader: string): Record<string, string> {
 
 async function chatAction({ context, request }: ActionFunctionArgs) {
   const streamRecovery = new StreamRecoveryManager({
-    timeout: 45000,
+    timeout: 300000,
     maxRetries: 2,
     onTimeout: () => {
       logger.warn('Stream timeout - attempting recovery');
@@ -103,7 +103,8 @@ async function chatAction({ context, request }: ActionFunctionArgs) {
         let summary: string | undefined = undefined;
         let messageSliceId = 0;
 
-        const processedMessages = await mcpService.processToolInvocations(messages, dataStream);
+        let processedMessages = await mcpService.processToolInvocations(messages, dataStream);
+        processedMessages = await builtinToolService.processToolInvocations(processedMessages, dataStream);
 
         if (processedMessages.length > 3) {
           messageSliceId = processedMessages.length - 3;
@@ -243,10 +244,15 @@ async function chatAction({ context, request }: ActionFunctionArgs) {
                     title: string;
                     imageUrl: string;
                     htmlUrl: string;
+                    screenId?: string;
                   }>;
+                  const designSystem = 'designSystem' in result.result ? result.result.designSystem : undefined;
+                  const projectId = 'projectId' in result.result ? (result.result.projectId as string) : undefined;
                   dataStream.writeMessageAnnotation({
                     type: 'designCards',
                     designs,
+                    ...(projectId ? { projectId } : {}),
+                    ...(designSystem ? { designSystem } : {}),
                   } satisfies DesignCardsAnnotation);
                 }
               }

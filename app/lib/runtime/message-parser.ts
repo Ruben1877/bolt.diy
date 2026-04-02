@@ -1,4 +1,12 @@
-import type { ActionType, BoltAction, BoltActionData, FileAction, ShellAction, SupabaseAction } from '~/types/actions';
+import type {
+  ActionType,
+  BoltAction,
+  BoltActionData,
+  FileAction,
+  ReplaceAction,
+  ShellAction,
+  SupabaseAction,
+} from '~/types/actions';
 import type { BoltArtifactData } from '~/types/artifact';
 import { createScopedLogger } from '~/utils/logger';
 import { unreachable } from '~/utils/unreachable';
@@ -149,13 +157,16 @@ export class StreamingMessageParser {
             let content = currentAction.content.trim();
 
             if ('type' in currentAction && currentAction.type === 'file') {
-              // Remove markdown code block syntax if present and file is not markdown
               if (!currentAction.filePath.endsWith('.md')) {
                 content = cleanoutMarkdownSyntax(content);
                 content = cleanEscapedTags(content);
               }
 
               content += '\n';
+            }
+
+            if ('type' in currentAction && currentAction.type === 'replace') {
+              (currentAction as ReplaceAction).replacements = parseReplacements(content);
             }
 
             currentAction.content = content;
@@ -179,10 +190,10 @@ export class StreamingMessageParser {
 
             i = closeIndex + ARTIFACT_ACTION_TAG_CLOSE.length;
           } else {
-            if ('type' in currentAction && currentAction.type === 'file') {
+            if ('type' in currentAction && (currentAction.type === 'file' || currentAction.type === 'replace')) {
               let content = input.slice(i);
 
-              if (!currentAction.filePath.endsWith('.md')) {
+              if (currentAction.type === 'file' && !currentAction.filePath.endsWith('.md')) {
                 content = cleanoutMarkdownSyntax(content);
                 content = cleanEscapedTags(content);
               }
@@ -365,6 +376,15 @@ export class StreamingMessageParser {
 
         (actionAttributes as SupabaseAction).filePath = filePath;
       }
+    } else if (actionType === 'replace') {
+      const filePath = this.#extractAttribute(actionTag, 'filePath') as string;
+
+      if (!filePath) {
+        logger.debug('File path not specified for replace action');
+      }
+
+      (actionAttributes as ReplaceAction).filePath = filePath;
+      (actionAttributes as ReplaceAction).replacements = [];
     } else if (actionType === 'file') {
       const filePath = this.#extractAttribute(actionTag, 'filePath') as string;
 
@@ -377,7 +397,7 @@ export class StreamingMessageParser {
       logger.warn(`Unknown action type '${actionType}'`);
     }
 
-    return actionAttributes as FileAction | ShellAction;
+    return actionAttributes as FileAction | ShellAction | ReplaceAction;
   }
 
   #extractAttribute(tag: string, attributeName: string): string | undefined {
@@ -413,4 +433,23 @@ function createQuickActionElement(props: Record<string, string>, label: string) 
 
 function createQuickActionGroup(buttons: string[]) {
   return `<div class=\"__boltQuickAction__\" data-bolt-quick-action=\"true\">${buttons.join('')}</div>`;
+}
+
+/**
+ * Parses <search>...</search><replace>...</replace> pairs from action content.
+ * Supports multiple pairs per action for batch replacements.
+ */
+function parseReplacements(content: string): Array<{ search: string; replace: string }> {
+  const replacements: Array<{ search: string; replace: string }> = [];
+  const pairRegex = /<search>([\s\S]*?)<\/search>\s*<replace>([\s\S]*?)<\/replace>/g;
+  let match;
+
+  while ((match = pairRegex.exec(content)) !== null) {
+    replacements.push({
+      search: match[1],
+      replace: match[2],
+    });
+  }
+
+  return replacements;
 }

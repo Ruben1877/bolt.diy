@@ -185,7 +185,7 @@ export const AssistantMessage = memo(
           {content}
         </Markdown>
         {designCards && designCards.designs?.length > 0 && (
-          <DesignCards designs={designCards.designs} append={append} />
+          <DesignCards designs={designCards.designs} projectId={designCards.projectId} designSystem={designCards.designSystem} append={append} />
         )}
         {toolInvocations && toolInvocations.length > 0 && (
           <ToolInvocations

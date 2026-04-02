@@ -6,19 +6,19 @@ export interface DesignScheme {
 
 export const defaultDesignScheme: DesignScheme = {
   palette: {
-    primary: '#9E7FFF',
-    secondary: '#38bdf8',
-    accent: '#f472b6',
-    background: '#171717',
-    surface: '#262626',
-    text: '#FFFFFF',
-    textSecondary: '#A3A3A3',
-    border: '#2F2F2F',
-    success: '#10b981',
-    warning: '#f59e0b',
-    error: '#ef4444',
+    primary: '#C4632A',
+    secondary: '#F5E6DC',
+    accent: '#B5572A',
+    background: '#FFFFFF',
+    surface: '#F3F4F6',
+    text: '#1A1A2E',
+    textSecondary: '#6B7280',
+    border: '#E5E7EB',
+    success: '#10B981',
+    warning: '#F59E0B',
+    error: '#EF4444',
   },
-  features: ['rounded'],
+  features: ['rounded', 'shadow'],
   font: ['sans-serif'],
 };
 
