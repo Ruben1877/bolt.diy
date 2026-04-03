@@ -1,5 +1,8 @@
-import { memo, useState, useCallback, useRef } from 'react';
+import { memo, useState, useCallback, useRef, useEffect } from 'react';
+import { useStore } from '@nanostores/react';
 import type { Message } from 'ai';
+import { brandAssetsStore } from '~/lib/stores/brandAssets';
+import { replaceImagesWithBrandAssets, hasBrandAssets } from '~/lib/utils/imageReplacer';
 
 interface Design {
   option: number;
@@ -34,6 +37,29 @@ function getThumbUrl(url: string): string {
   return url;
 }
 
+async function fetchAndReplaceHtml(htmlUrl: string, brandAssets: { logo: string | null; photos: string[] }): Promise<string | null> {
+  try {
+    const res = await fetch('/api/fetch-html', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ url: htmlUrl }),
+    });
+    const data = (await res.json()) as { html?: string };
+
+    if (!data.html) {
+      return null;
+    }
+
+    if (hasBrandAssets(brandAssets)) {
+      return replaceImagesWithBrandAssets(data.html, brandAssets);
+    }
+
+    return data.html;
+  } catch {
+    return null;
+  }
+}
+
 export const DesignCards = memo(({ designs: initialDesigns, projectId, append, loading, totalExpected }: DesignCardsProps) => {
   const [designs, setDesigns] = useState(initialDesigns);
   const [currentIndex, setCurrentIndex] = useState(0);
@@ -44,16 +70,49 @@ export const DesignCards = memo(({ designs: initialDesigns, projectId, append, l
   const [refining, setRefining] = useState(false);
   const refineInputRef = useRef<HTMLInputElement>(null);
 
+  const [liveHtml, setLiveHtml] = useState<Record<number, string>>({});
+  const [htmlLoading, setHtmlLoading] = useState<Record<number, boolean>>({});
+  const fetchedUrlsRef = useRef<Set<string>>(new Set());
+
+  const brandAssets = useStore(brandAssetsStore);
+  const hasAssets = hasBrandAssets(brandAssets);
+
   const prevDesignsRef = useRef(initialDesigns);
+
   if (initialDesigns !== prevDesignsRef.current && initialDesigns.length !== prevDesignsRef.current.length) {
     prevDesignsRef.current = initialDesigns;
     setDesigns(initialDesigns);
     setImageLoaded({});
   }
 
+  useEffect(() => {
+    if (!hasAssets) {
+      return;
+    }
+
+    for (const design of designs) {
+      if (!design.htmlUrl || fetchedUrlsRef.current.has(design.htmlUrl)) {
+        continue;
+      }
+
+      fetchedUrlsRef.current.add(design.htmlUrl);
+      setHtmlLoading((prev) => ({ ...prev, [design.option]: true }));
+
+      fetchAndReplaceHtml(design.htmlUrl, brandAssets).then((html) => {
+        if (html) {
+          setLiveHtml((prev) => ({ ...prev, [design.option]: html }));
+        }
+
+        setHtmlLoading((prev) => ({ ...prev, [design.option]: false }));
+      });
+    }
+  }, [designs, hasAssets, brandAssets]);
+
   const current = designs[currentIndex];
   const total = designs.length;
   const pendingCount = loading && totalExpected ? Math.max(0, totalExpected - designs.length) : 0;
+  const currentLiveHtml = current ? liveHtml[current.option] : undefined;
+  const currentHtmlLoading = current ? htmlLoading[current.option] : false;
 
   const goTo = useCallback(
     (index: number) => {
@@ -73,53 +132,59 @@ export const DesignCards = memo(({ designs: initialDesigns, projectId, append, l
       setFetching(true);
       setSelectedOption(design.option);
 
-      let htmlContent = '';
+      let htmlContent = liveHtml[design.option] || '';
 
-      try {
-        const res = await fetch('/api/fetch-html', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ url: design.htmlUrl }),
-        });
-        const data = (await res.json()) as { html?: string };
-
-        if (data.html) {
-          htmlContent = data.html;
-        }
-      } catch {
-        // Fall back to URL-only approach
-      } finally {
-        setFetching(false);
+      if (!htmlContent) {
+        htmlContent = (await fetchAndReplaceHtml(design.htmlUrl, brandAssets)) || '';
       }
 
-      const prompt = htmlContent
-        ? [
-            `Je choisis le design ${design.option} (${design.title}).`,
-            '',
-            'Voici le code HTML complet de la maquette Stitch sélectionnée :',
-            '',
-            '```html',
-            htmlContent,
-            '```',
-            '',
-            'INSTRUCTIONS CRITIQUES :',
-            '- Reproduis ce design À L\'IDENTIQUE en React + Vite + TypeScript (TSX) + Tailwind CSS.',
-            '- Conserve exactement la même structure de sections, le même layout, les mêmes couleurs, polices, espacements, images et textes.',
-            '- Convertis le CSS inline et les classes en classes Tailwind équivalentes.',
-            '- Adapte le contenu textuel au business de l\'utilisateur tout en gardant la structure visuelle identique.',
-            '- Les images utilisent les mêmes URLs que dans le HTML source.',
-            '- Le résultat doit être pixel-perfect par rapport à la maquette.',
-            '- IMPORTANT JSX : Échappe TOUJOURS les caractères spéciaux HTML dans le texte JSX : utilise &lt; pour <, &gt; pour >, &amp; pour &, {\'<\'} ou {\'>\'}. Ne JAMAIS écrire un < ou > brut dans du texte JSX.',
-          ].join('\n')
-        : `Je choisis le design ${design.option} (${design.title}). Voici le lien vers le HTML du design : ${design.htmlUrl}\n\nUtilise fetch_website en format html sur ce lien, puis reproduis ce design À L'IDENTIQUE en React + Vite + TSX + Tailwind CSS. Le résultat doit être pixel-perfect.`;
+      setFetching(false);
+
+      const hasClientPhotos = hasBrandAssets(brandAssets);
+
+      const instructions = [
+        `Je choisis le design ${design.option} (${design.title}).`,
+        '',
+      ];
+
+      if (htmlContent) {
+        instructions.push(
+          'Voici le code HTML complet de la maquette Stitch sélectionnée :',
+          '',
+          '```html',
+          htmlContent,
+          '```',
+          '',
+          'INSTRUCTIONS CRITIQUES :',
+          '- Reproduis ce design À L\'IDENTIQUE en React + Vite + TypeScript (TSX) + Tailwind CSS.',
+          '- Conserve exactement la même structure de sections, le même layout, les mêmes couleurs, polices, espacements, images et textes.',
+          '- Convertis le CSS inline et les classes en classes Tailwind équivalentes.',
+          '- Adapte le contenu textuel au business de l\'utilisateur tout en gardant la structure visuelle identique.',
+          '- Les images utilisent les mêmes URLs que dans le HTML source.',
+          '- Le résultat doit être pixel-perfect par rapport à la maquette.',
+          '- IMPORTANT JSX : Échappe TOUJOURS les caractères spéciaux HTML dans le texte JSX : utilise &lt; pour <, &gt; pour >, &amp; pour &, {\'<\'} ou {\'>\'}. Ne JAMAIS écrire un < ou > brut dans du texte JSX.',
+        );
+
+        if (hasClientPhotos) {
+          instructions.push(
+            '- IMPORTANT : Les images dans ce HTML sont les VRAIES photos du client. Conserve EXACTEMENT les mêmes URLs/src d\'images dans ton code React. Ne les remplace PAS par des images Unsplash ou des placeholders.',
+          );
+        }
+      } else {
+        instructions.push(
+          `Voici le lien vers le HTML du design : ${design.htmlUrl}`,
+          '',
+          'Utilise fetch_website en format html sur ce lien, puis reproduis ce design À L\'IDENTIQUE en React + Vite + TSX + Tailwind CSS. Le résultat doit être pixel-perfect.',
+        );
+      }
 
       append?.({
         id: crypto.randomUUID(),
         role: 'user',
-        content: prompt,
+        content: instructions.join('\n'),
       });
     },
-    [append, selectedOption, fetching],
+    [append, selectedOption, fetching, liveHtml, brandAssets],
   );
 
   const handleRefine = useCallback(async () => {
@@ -150,23 +215,34 @@ export const DesignCards = memo(({ designs: initialDesigns, projectId, append, l
       };
 
       if (data.success && (data.imageUrl || data.htmlUrl)) {
+        const newHtmlUrl = data.htmlUrl || current.htmlUrl;
+
+        if (data.htmlUrl) {
+          fetchedUrlsRef.current.delete(current.htmlUrl);
+        }
+
         setDesigns((prev) =>
           prev.map((d, i) =>
             i === currentIndex
               ? {
                   ...d,
                   imageUrl: data.imageUrl || d.imageUrl,
-                  htmlUrl: data.htmlUrl || d.htmlUrl,
+                  htmlUrl: newHtmlUrl,
                   screenId: data.screenId || d.screenId,
                 }
               : d,
           ),
         );
         setImageLoaded((prev) => ({ ...prev, [current.option]: false }));
+        setLiveHtml((prev) => {
+          const next = { ...prev };
+          delete next[current.option];
+          return next;
+        });
         setRefinePrompt('');
       }
     } catch {
-      // Silently fail — user can retry
+      // Silently fail
     } finally {
       setRefining(false);
     }
@@ -178,11 +254,8 @@ export const DesignCards = memo(({ designs: initialDesigns, projectId, append, l
     <div className="my-4 space-y-3">
       {/* Mockup viewer */}
       <div className="rounded-xl border border-bolt-elements-borderColor overflow-hidden">
-        {/* Image - scrollable */}
-        <div
-          className="relative overflow-y-auto"
-          style={{ maxHeight: '480px' }}
-        >
+        {/* Preview area */}
+        <div className="relative overflow-y-auto" style={{ maxHeight: '480px' }}>
           {/* Nav arrows */}
           {currentIndex > 0 && !selectedOption && (
             <button
@@ -201,22 +274,41 @@ export const DesignCards = memo(({ designs: initialDesigns, projectId, append, l
             </button>
           )}
 
-          {!imageLoaded[current?.option] && (
-            <div className="flex items-center justify-center min-h-[280px]">
-              <div className="i-svg-spinners:90-ring-with-bg text-2xl text-bolt-elements-textTertiary" />
-            </div>
+          {/* Live iframe preview (shown when brand assets + HTML ready) */}
+          {currentLiveHtml ? (
+            <iframe
+              key={`live-${current?.option}`}
+              srcDoc={currentLiveHtml}
+              title={current?.title}
+              className="w-full border-0"
+              style={{ height: '480px' }}
+              sandbox="allow-same-origin"
+            />
+          ) : (
+            <>
+              {(!imageLoaded[current?.option] || currentHtmlLoading) && (
+                <div className="flex flex-col items-center justify-center min-h-[280px] gap-2">
+                  <div className="i-svg-spinners:90-ring-with-bg text-2xl text-bolt-elements-textTertiary" />
+                  {currentHtmlLoading && hasAssets && (
+                    <span className="text-[10px] text-bolt-elements-textTertiary">
+                      Intégration de vos photos…
+                    </span>
+                  )}
+                </div>
+              )}
+              <img
+                key={current?.option}
+                src={getHiResUrl(current?.imageUrl)}
+                alt={current?.title}
+                referrerPolicy="no-referrer"
+                crossOrigin="anonymous"
+                className={`w-full ${imageLoaded[current?.option] ? 'opacity-100' : 'opacity-0 absolute inset-0'}`}
+                onLoad={() => setImageLoaded((prev) => ({ ...prev, [current?.option]: true }))}
+                onError={() => setImageLoaded((prev) => ({ ...prev, [current?.option]: true }))}
+                loading="eager"
+              />
+            </>
           )}
-          <img
-            key={current?.option}
-            src={getHiResUrl(current?.imageUrl)}
-            alt={current?.title}
-            referrerPolicy="no-referrer"
-            crossOrigin="anonymous"
-            className={`w-full ${imageLoaded[current?.option] ? 'opacity-100' : 'opacity-0 absolute inset-0'}`}
-            onLoad={() => setImageLoaded((prev) => ({ ...prev, [current?.option]: true }))}
-            onError={() => setImageLoaded((prev) => ({ ...prev, [current?.option]: true }))}
-            loading="eager"
-          />
         </div>
 
         {/* Bottom bar */}
@@ -239,6 +331,9 @@ export const DesignCards = memo(({ designs: initialDesigns, projectId, append, l
               </div>
               <span className="text-xs text-bolt-elements-textTertiary truncate">
                 {current?.title}
+                {currentLiveHtml && hasAssets && (
+                  <span className="ml-1.5 text-accent-500">● vos photos</span>
+                )}
               </span>
             </div>
 
@@ -262,7 +357,7 @@ export const DesignCards = memo(({ designs: initialDesigns, projectId, append, l
             ) : null}
           </div>
 
-          {/* Refine input — only shown before validation and when projectId + screenId are available */}
+          {/* Refine input */}
           {!selectedOption && !fetching && projectId && current?.screenId && (
             <div className="flex items-center gap-2">
               <input

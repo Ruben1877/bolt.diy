@@ -53,6 +53,8 @@ interface ChatBoxProps {
   setDesignScheme?: (scheme: DesignScheme) => void;
   selectedElement?: ElementInfo | null;
   setSelectedElement?: ((element: ElementInfo | null) => void) | undefined;
+  brandAssetsOpen?: boolean;
+  onToggleBrandAssets?: () => void;
 }
 
 export const ChatBox: React.FC<ChatBoxProps> = (props) => {
@@ -223,6 +225,18 @@ export const ChatBox: React.FC<ChatBoxProps> = (props) => {
             ) : (
               <div className="i-bolt:stars text-lg"></div>
             )}
+          </IconButton>
+          <IconButton
+            title="Photos du client"
+            className={classNames(
+              'transition-all',
+              props.brandAssetsOpen
+                ? 'text-accent-500'
+                : 'text-bolt-elements-textTertiary hover:text-bolt-elements-textSecondary',
+            )}
+            onClick={() => props.onToggleBrandAssets?.()}
+          >
+            <div className="i-ph:images-square text-lg" />
           </IconButton>
           <ColorSchemeDialog designScheme={props.designScheme} setDesignScheme={props.setDesignScheme} />
           <SpeechRecognitionButton

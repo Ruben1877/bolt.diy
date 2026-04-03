@@ -1038,7 +1038,7 @@ export function createStitchDesignTool(
   return tool({
     description:
       'Generate professional website mockups using Google Stitch AI. ' +
-      'Creates 4 radically different design variants based on a creative brief. ' +
+      'Creates 2 design variants based on a creative brief. ' +
       'Screenshots award-winning websites as visual references and feeds them to Stitch for inspiration. ' +
       'Users can provide their own reference_urls of websites they find beautiful. ' +
       'Returns screenshot previews, HTML for each variant, and a design system (palette, typography, features). ' +
@@ -1292,7 +1292,7 @@ export function createStitchDesignTool(
               projectId,
               designSystem,
               true,
-              4,
+              2,
             );
             didEmitLoadingCards = true;
             emitProgress('stitch', 'in-progress', 'Premier design prêt ! Génération des variantes...');
@@ -1331,15 +1331,15 @@ export function createStitchDesignTool(
           logger.warn(`Design system creation skipped: ${dsErr instanceof Error ? dsErr.message : dsErr}`);
         }
 
-        emitProgress('stitch', 'in-progress', 'Création des 4 variantes de design...');
+        emitProgress('stitch', 'in-progress', 'Création des 2 variantes de design...');
 
-        logger.info('Generating 4 design variants (REIMAGINE)...');
+        logger.info('Generating 2 design variants (REIMAGINE)...');
         const variantArgs = {
           projectId,
           selectedScreenIds: [baseScreenId],
           prompt: briefWithRefs,
           variantOptions: {
-            variantCount: 4,
+            variantCount: 2,
             creativeRange: 'REIMAGINE',
             aspects: ['COLOR_SCHEME', 'LAYOUT', 'TEXT_FONT', 'IMAGES', 'TEXT_CONTENT'],
           },

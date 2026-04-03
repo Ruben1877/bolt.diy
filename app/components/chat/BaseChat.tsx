@@ -31,6 +31,7 @@ import type { DesignScheme } from '~/types/design-scheme';
 import type { ElementInfo } from '~/components/workbench/Inspector';
 import LlmErrorAlert from './LLMApiAlert';
 import { workbenchStore } from '~/lib/stores/workbench';
+import { BrandAssetsPanel } from './BrandAssetsPanel';
 
 const TEXTAREA_MIN_HEIGHT = 76;
 
@@ -145,6 +146,7 @@ export const BaseChat = React.forwardRef<HTMLDivElement, BaseChatProps>(
     const expoUrl = useStore(expoUrlAtom);
     const showWorkbench = useStore(workbenchStore.showWorkbench);
     const [qrModalOpen, setQrModalOpen] = useState(false);
+    const [brandAssetsOpen, setBrandAssetsOpen] = useState(false);
 
     useEffect(() => {
       if (expoUrl) {
@@ -488,6 +490,9 @@ export const BaseChat = React.forwardRef<HTMLDivElement, BaseChatProps>(
                   {llmErrorAlert && <LlmErrorAlert alert={llmErrorAlert} clearAlert={() => clearLlmErrorAlert?.()} />}
                 </div>
                 {progressAnnotations && <ProgressCompilation data={progressAnnotations} />}
+                {brandAssetsOpen && (
+                  <BrandAssetsPanel onClose={() => setBrandAssetsOpen(false)} />
+                )}
                 <ChatBox
                   isModelSettingsCollapsed={isModelSettingsCollapsed}
                   setIsModelSettingsCollapsed={setIsModelSettingsCollapsed}
@@ -530,6 +535,8 @@ export const BaseChat = React.forwardRef<HTMLDivElement, BaseChatProps>(
                   selectedElement={selectedElement}
                   setSelectedElement={setSelectedElement}
                   onWebSearchResult={onWebSearchResult}
+                  brandAssetsOpen={brandAssetsOpen}
+                  onToggleBrandAssets={() => setBrandAssetsOpen((v) => !v)}
                 />
               </div>
             </StickToBottom>
