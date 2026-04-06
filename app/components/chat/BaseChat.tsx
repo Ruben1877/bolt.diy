@@ -28,6 +28,7 @@ import { useStore } from '@nanostores/react';
 import { StickToBottom, useStickToBottomContext } from '~/lib/hooks';
 import { ChatBox } from './ChatBox';
 import type { DesignScheme } from '~/types/design-scheme';
+import FallingRobots from '~/components/ui/FallingRobots.client';
 import type { ElementInfo } from '~/components/workbench/Inspector';
 import LlmErrorAlert from './LLMApiAlert';
 import { workbenchStore } from '~/lib/stores/workbench';
@@ -396,16 +397,7 @@ export const BaseChat = React.forwardRef<HTMLDivElement, BaseChatProps>(
           >
             {!chatStarted && (
               <>
-                <video
-                  autoPlay
-                  loop
-                  muted
-                  playsInline
-                  preload="auto"
-                  className="absolute inset-0 w-full h-full object-cover z-0 pointer-events-none"
-                >
-                  <source src="/background-hd.mp4" type="video/mp4" />
-                </video>
+                <FallingRobots />
                 <div id="intro" className="mt-[16vh] max-w-2xl mx-auto text-center px-4 lg:px-0 relative z-1">
                   <div className="flex justify-center mb-6 animate-fade-in">
                     <div className="w-14 h-14 rounded-2xl bg-accent-500 flex items-center justify-center shadow-lg shadow-accent-500/20">
