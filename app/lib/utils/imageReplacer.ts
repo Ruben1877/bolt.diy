@@ -33,6 +33,7 @@ function isStockImage(src: string): boolean {
 function getContext(html: string, index: number, radius = 300): string {
   const start = Math.max(0, index - radius);
   const end = Math.min(html.length, index + radius);
+
   return html.slice(start, end).toLowerCase();
 }
 

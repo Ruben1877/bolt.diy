@@ -26,6 +26,7 @@ export function createSearchFilesTool(getFiles: () => FileMap) {
         .describe('Glob pattern to filter files (e.g. "src/**/*.tsx"). Defaults to all files.'),
       case_sensitive: z.boolean().optional().default(false).describe('Whether to match case. Defaults to false.'),
     }),
+    // eslint-disable-next-line @typescript-eslint/naming-convention
     execute: async ({ query, include_pattern, case_sensitive }) => {
       logger.debug(`Searching for "${query}" in ${include_pattern || 'all files'}`);
 

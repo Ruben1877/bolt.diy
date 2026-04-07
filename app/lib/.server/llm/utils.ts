@@ -1,5 +1,6 @@
 import { type Message } from 'ai';
 import { DEFAULT_MODEL, DEFAULT_PROVIDER, MODEL_REGEX, PROVIDER_REGEX } from '~/utils/constants';
+
 // MODEL_REGEX and PROVIDER_REGEX kept for cleaning message content
 import { IGNORE_PATTERNS, type FileMap } from './constants';
 import ignore from 'ignore';
@@ -45,7 +46,7 @@ export function simplifyBoltActions(input: string): string {
 
 export function createFileTreeListing(files: FileMap): string {
   const ig = ignore().add(IGNORE_PATTERNS);
-  let filePaths = Object.keys(files)
+  const filePaths = Object.keys(files)
     .filter((x) => {
       const relPath = x.replace('/home/project/', '');
       return !ig.ignores(relPath);

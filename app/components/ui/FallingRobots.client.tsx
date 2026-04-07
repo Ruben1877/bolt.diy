@@ -14,18 +14,102 @@ interface RobotConfig {
 const ROBOT_SIZE = 60;
 
 const ROBOTS: RobotConfig[] = [
-  { id: 'builder', gradientStart: '#7C6FFF', gradientEnd: '#5A4FE0', irisColor: '#3730A3', blushColor: '#A89BFF', footColor: '#4A3FC8' },
-  { id: 'lou', gradientStart: '#22D3A0', gradientEnd: '#0EA874', irisColor: '#065F46', blushColor: '#6EE7B7', footColor: '#059669' },
-  { id: 'elio', gradientStart: '#FF5C87', gradientEnd: '#E0325E', irisColor: '#881337', blushColor: '#FDA4AF', footColor: '#BE123C' },
-  { id: 'julia', gradientStart: '#FFD166', gradientEnd: '#F5B800', irisColor: '#78350F', blushColor: '#FDE68A', footColor: '#D97706' },
-  { id: 'tom', gradientStart: '#A78BFA', gradientEnd: '#7C3AED', irisColor: '#4C1D95', blushColor: '#C4B5FD', footColor: '#6D28D9' },
-  { id: 'manue', gradientStart: '#FB923C', gradientEnd: '#EA580C', irisColor: '#7C2D12', blushColor: '#FDBA74', footColor: '#C2410C' },
-  { id: 'john', gradientStart: '#38BDF8', gradientEnd: '#0284C7', irisColor: '#0C4A6E', blushColor: '#7DD3FC', footColor: '#0369A1' },
-  { id: 'chatbot', gradientStart: '#2DD4BF', gradientEnd: '#0D9488', irisColor: '#134E4A', blushColor: '#5EEAD4', footColor: '#0F766E' },
-  { id: 'router', gradientStart: '#94A3B8', gradientEnd: '#64748B', irisColor: '#1E293B', blushColor: '#CBD5E1', footColor: '#475569' },
-  { id: 'fiche', gradientStart: '#F472B6', gradientEnd: '#DB2777', irisColor: '#831843', blushColor: '#F9A8D4', footColor: '#BE185D' },
-  { id: 'alex', gradientStart: '#F43F5E', gradientEnd: '#BE123C', irisColor: '#4C0519', blushColor: '#FDA4AF', footColor: '#9F1239' },
-  { id: 'nova', gradientStart: '#06B6D4', gradientEnd: '#0891B2', irisColor: '#164E63', blushColor: '#67E8F9', footColor: '#0E7490' },
+  {
+    id: 'builder',
+    gradientStart: '#7C6FFF',
+    gradientEnd: '#5A4FE0',
+    irisColor: '#3730A3',
+    blushColor: '#A89BFF',
+    footColor: '#4A3FC8',
+  },
+  {
+    id: 'lou',
+    gradientStart: '#22D3A0',
+    gradientEnd: '#0EA874',
+    irisColor: '#065F46',
+    blushColor: '#6EE7B7',
+    footColor: '#059669',
+  },
+  {
+    id: 'elio',
+    gradientStart: '#FF5C87',
+    gradientEnd: '#E0325E',
+    irisColor: '#881337',
+    blushColor: '#FDA4AF',
+    footColor: '#BE123C',
+  },
+  {
+    id: 'julia',
+    gradientStart: '#FFD166',
+    gradientEnd: '#F5B800',
+    irisColor: '#78350F',
+    blushColor: '#FDE68A',
+    footColor: '#D97706',
+  },
+  {
+    id: 'tom',
+    gradientStart: '#A78BFA',
+    gradientEnd: '#7C3AED',
+    irisColor: '#4C1D95',
+    blushColor: '#C4B5FD',
+    footColor: '#6D28D9',
+  },
+  {
+    id: 'manue',
+    gradientStart: '#FB923C',
+    gradientEnd: '#EA580C',
+    irisColor: '#7C2D12',
+    blushColor: '#FDBA74',
+    footColor: '#C2410C',
+  },
+  {
+    id: 'john',
+    gradientStart: '#38BDF8',
+    gradientEnd: '#0284C7',
+    irisColor: '#0C4A6E',
+    blushColor: '#7DD3FC',
+    footColor: '#0369A1',
+  },
+  {
+    id: 'chatbot',
+    gradientStart: '#2DD4BF',
+    gradientEnd: '#0D9488',
+    irisColor: '#134E4A',
+    blushColor: '#5EEAD4',
+    footColor: '#0F766E',
+  },
+  {
+    id: 'router',
+    gradientStart: '#94A3B8',
+    gradientEnd: '#64748B',
+    irisColor: '#1E293B',
+    blushColor: '#CBD5E1',
+    footColor: '#475569',
+  },
+  {
+    id: 'fiche',
+    gradientStart: '#F472B6',
+    gradientEnd: '#DB2777',
+    irisColor: '#831843',
+    blushColor: '#F9A8D4',
+    footColor: '#BE185D',
+  },
+  {
+    id: 'alex',
+    gradientStart: '#F43F5E',
+    gradientEnd: '#BE123C',
+    irisColor: '#4C0519',
+    blushColor: '#FDA4AF',
+    footColor: '#9F1239',
+  },
+  {
+    id: 'nova',
+    gradientStart: '#06B6D4',
+    gradientEnd: '#0891B2',
+    irisColor: '#164E63',
+    blushColor: '#67E8F9',
+    footColor: '#0E7490',
+  },
 ];
 
 interface PhysicsState {
@@ -104,7 +188,10 @@ export default function FallingRobots() {
 
   const updateEyes = useCallback(() => {
     const rect = containerRef.current?.getBoundingClientRect();
-    if (!rect) return;
+
+    if (!rect) {
+      return;
+    }
 
     const mx = mousePos.current.x;
     const my = mousePos.current.y;
@@ -117,7 +204,10 @@ export default function FallingRobots() {
     for (let i = 0; i < ROBOTS.length; i++) {
       const el = robotEls.current[i];
       const st = physics.current[i];
-      if (!el || !st) continue;
+
+      if (!el || !st) {
+        continue;
+      }
 
       const cx = rect.left + st.x + s / 2;
       const cy = rect.top + st.y + s * 0.225;
@@ -132,15 +222,33 @@ export default function FallingRobots() {
       const pupilL = el.querySelector('.pupil-l') as SVGCircleElement | null;
       const pupilR = el.querySelector('.pupil-r') as SVGCircleElement | null;
 
-      if (irisL) { irisL.setAttribute('cx', String(leftBaseX + offX * 0.7)); irisL.setAttribute('cy', String(baseEyeY + s * 0.02 + offY * 0.7)); }
-      if (irisR) { irisR.setAttribute('cx', String(rightBaseX + offX * 0.7)); irisR.setAttribute('cy', String(baseEyeY + s * 0.02 + offY * 0.7)); }
-      if (pupilL) { pupilL.setAttribute('cx', String(leftBaseX + offX * 0.5)); pupilL.setAttribute('cy', String(baseEyeY + s * 0.03 + offY * 0.5)); }
-      if (pupilR) { pupilR.setAttribute('cx', String(rightBaseX + offX * 0.5)); pupilR.setAttribute('cy', String(baseEyeY + s * 0.03 + offY * 0.5)); }
+      if (irisL) {
+        irisL.setAttribute('cx', String(leftBaseX + offX * 0.7));
+        irisL.setAttribute('cy', String(baseEyeY + s * 0.02 + offY * 0.7));
+      }
+
+      if (irisR) {
+        irisR.setAttribute('cx', String(rightBaseX + offX * 0.7));
+        irisR.setAttribute('cy', String(baseEyeY + s * 0.02 + offY * 0.7));
+      }
+
+      if (pupilL) {
+        pupilL.setAttribute('cx', String(leftBaseX + offX * 0.5));
+        pupilL.setAttribute('cy', String(baseEyeY + s * 0.03 + offY * 0.5));
+      }
+
+      if (pupilR) {
+        pupilR.setAttribute('cx', String(rightBaseX + offX * 0.5));
+        pupilR.setAttribute('cy', String(baseEyeY + s * 0.03 + offY * 0.5));
+      }
     }
   }, []);
 
   useEffect(() => {
-    if (mounted.current || !containerRef.current) return;
+    if (mounted.current || !containerRef.current) {
+      return undefined;
+    }
+
     mounted.current = true;
 
     const container = containerRef.current;
@@ -150,6 +258,7 @@ export default function FallingRobots() {
     const margin = ROBOT_SIZE;
     const usableWidth = w - margin * 2;
     const basePositions: number[] = [];
+
     for (let i = 0; i < count; i++) {
       const base = margin + (usableWidth / (count - 1)) * i;
       const jitter = (Math.random() - 0.5) * (usableWidth / count) * 0.6;
@@ -216,14 +325,20 @@ export default function FallingRobots() {
 
       for (let i = 0; i < count; i++) {
         const a = physics.current[i];
-        if (a.y < -ROBOT_SIZE) continue;
+
+        if (a.y < -ROBOT_SIZE) {
+          continue;
+        }
 
         for (let j = i + 1; j < count; j++) {
           const b = physics.current[j];
-          if (b.y < -ROBOT_SIZE) continue;
 
-          const dx = (b.x + half) - (a.x + half);
-          const dy = (b.y + half) - (a.y + half);
+          if (b.y < -ROBOT_SIZE) {
+            continue;
+          }
+
+          const dx = b.x + half - (a.x + half);
+          const dy = b.y + half - (a.y + half);
           const dist = Math.sqrt(dx * dx + dy * dy);
 
           if (dist < minDist && dist > 0.01) {
@@ -234,6 +349,7 @@ export default function FallingRobots() {
             if (a.dragging) {
               b.x += nx * overlap;
               b.y += ny * overlap;
+
               const impactSpeed = Math.sqrt(a.vx * a.vx + a.vy * a.vy) * 0.8 + 2;
               b.vx += nx * impactSpeed;
               b.vy += ny * impactSpeed;
@@ -242,6 +358,7 @@ export default function FallingRobots() {
             } else if (b.dragging) {
               a.x -= nx * overlap;
               a.y -= ny * overlap;
+
               const impactSpeed = Math.sqrt(b.vx * b.vx + b.vy * b.vy) * 0.8 + 2;
               a.vx -= nx * impactSpeed;
               a.vy -= ny * impactSpeed;
@@ -271,10 +388,25 @@ export default function FallingRobots() {
             }
 
             const clamp = (s: PhysicsState) => {
-              if (s.x < 0) { s.x = 0; s.vx *= -bounce; }
-              if (s.x + ROBOT_SIZE > cRect2.width) { s.x = cRect2.width - ROBOT_SIZE; s.vx *= -bounce; }
-              if (s.y < 0) { s.y = 0; s.vy *= -bounce; }
-              if (s.y + ROBOT_SIZE > floorY2) { s.y = floorY2 - ROBOT_SIZE; s.vy *= -bounce; }
+              if (s.x < 0) {
+                s.x = 0;
+                s.vx *= -bounce;
+              }
+
+              if (s.x + ROBOT_SIZE > cRect2.width) {
+                s.x = cRect2.width - ROBOT_SIZE;
+                s.vx *= -bounce;
+              }
+
+              if (s.y < 0) {
+                s.y = 0;
+                s.vy *= -bounce;
+              }
+
+              if (s.y + ROBOT_SIZE > floorY2) {
+                s.y = floorY2 - ROBOT_SIZE;
+                s.vy *= -bounce;
+              }
             };
             clamp(a);
             clamp(b);
@@ -293,8 +425,14 @@ export default function FallingRobots() {
 
       for (let i = 0; i < count; i++) {
         const st = physics.current[i];
-        if (st.dragging) continue;
-        if (elapsed < st.dropDelay) continue;
+
+        if (st.dragging) {
+          continue;
+        }
+
+        if (elapsed < st.dropDelay) {
+          continue;
+        }
 
         st.vy += gravity;
         st.vx *= friction;
@@ -309,6 +447,7 @@ export default function FallingRobots() {
           st.y = floorY - ROBOT_SIZE;
           st.vy *= -bounce;
           st.vr *= 0.6;
+
           if (Math.abs(st.vy) < 1.2) {
             st.vy = 0;
             st.landed = true;
@@ -316,9 +455,18 @@ export default function FallingRobots() {
           }
         }
 
-        if (st.y < 0) { st.y = 0; st.vy *= -bounce; }
-        if (st.x < 0) { st.x = 0; st.vx *= -bounce; }
-        else if (st.x + ROBOT_SIZE > cRect.width) { st.x = cRect.width - ROBOT_SIZE; st.vx *= -bounce; }
+        if (st.y < 0) {
+          st.y = 0;
+          st.vy *= -bounce;
+        }
+
+        if (st.x < 0) {
+          st.x = 0;
+          st.vx *= -bounce;
+        } else if (st.x + ROBOT_SIZE > cRect.width) {
+          st.x = cRect.width - ROBOT_SIZE;
+          st.vx *= -bounce;
+        }
 
         applyTransform(robotEls.current[i], st);
       }
@@ -326,6 +474,7 @@ export default function FallingRobots() {
       resolveCollisions();
 
       eyeCounter++;
+
       if (eyeCounter % 3 === 0) {
         updateEyes();
       }
@@ -337,12 +486,19 @@ export default function FallingRobots() {
 
     const onPointerDown = (e: PointerEvent) => {
       const target = (e.target as HTMLElement).closest('[data-robot-idx]') as HTMLElement | null;
-      if (!target) return;
+
+      if (!target) {
+        return;
+      }
 
       e.preventDefault();
+
       const idx = parseInt(target.dataset.robotIdx!, 10);
       const st = physics.current[idx];
-      if (!st) return;
+
+      if (!st) {
+        return;
+      }
 
       st.dragging = true;
       st.landed = false;
@@ -368,11 +524,16 @@ export default function FallingRobots() {
     const onPointerMove = (e: PointerEvent) => {
       mousePos.current = { x: e.clientX, y: e.clientY };
 
-      if (dragRef.current === null) return;
+      if (dragRef.current === null) {
+        return;
+      }
 
       const info = dragRef.current;
       const st = physics.current[info.index];
-      if (!st) return;
+
+      if (!st) {
+        return;
+      }
 
       const r = cRect();
       const now = performance.now();
@@ -394,13 +555,18 @@ export default function FallingRobots() {
     };
 
     const onPointerUp = () => {
-      if (dragRef.current === null) return;
+      if (dragRef.current === null) {
+        return;
+      }
+
       const idx = dragRef.current.index;
       const st = physics.current[idx];
+
       if (st) {
         st.dragging = false;
         st.vr = (Math.random() - 0.5) * 12;
       }
+
       robotEls.current[idx].style.zIndex = '10';
       robotEls.current[idx].style.cursor = 'grab';
       robotEls.current[idx].style.filter = 'drop-shadow(0 4px 12px rgba(0,0,0,0.3))';

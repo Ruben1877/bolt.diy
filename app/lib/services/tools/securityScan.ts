@@ -140,7 +140,7 @@ function scanForMissingRLS(filepath: string, content: string): SecurityIssue[] {
   return issues;
 }
 
-function scanForExposedEnv(filepath: string, content: string): SecurityIssue[] {
+function scanForExposedEnv(filepath: string, _content: string): SecurityIssue[] {
   const issues: SecurityIssue[] = [];
 
   if (filepath.match(/\.env(\.|$)/) && !filepath.includes('.example') && !filepath.includes('.local')) {

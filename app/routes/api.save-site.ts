@@ -25,11 +25,12 @@ export const action = async ({ request }: ActionFunctionArgs) => {
     return new Response(JSON.stringify({ error: 'Token invalide' }), { status: 401 });
   }
 
-  const userData = await userRes.json() as { id: string };
+  const userData = (await userRes.json()) as { id: string };
 
   let body: { name?: string; files?: Record<string, unknown> };
+
   try {
-    body = await request.json() as { name?: string; files?: Record<string, unknown> };
+    body = (await request.json()) as { name?: string; files?: Record<string, unknown> };
   } catch {
     return new Response(JSON.stringify({ error: 'Invalid JSON' }), { status: 400 });
   }
@@ -41,9 +42,9 @@ export const action = async ({ request }: ActionFunctionArgs) => {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
-      'Authorization': `Bearer ${token}`,
-      'apikey': supabaseAnonKey,
-      'Prefer': 'return=representation',
+      Authorization: `Bearer ${token}`,
+      apikey: supabaseAnonKey,
+      Prefer: 'return=representation',
     },
     body: JSON.stringify({
       user_id: userData.id,
@@ -58,7 +59,7 @@ export const action = async ({ request }: ActionFunctionArgs) => {
     return new Response(JSON.stringify({ error: err }), { status: 500 });
   }
 
-  const [site] = await insertRes.json() as { id: string; name: string; created_at: string }[];
+  const [site] = (await insertRes.json()) as { id: string; name: string; created_at: string }[];
 
   return new Response(JSON.stringify({ ok: true, site }), {
     headers: { 'Content-Type': 'application/json' },

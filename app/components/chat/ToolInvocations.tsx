@@ -130,6 +130,7 @@ export const ToolInvocations = memo(({ toolInvocations, toolCallAnnotations, add
 
         const { toolName, toolCallId } = inv.toolInvocation;
         const annotation = toolCallAnnotations.find((a) => a.toolCallId === toolCallId);
+
         return !isBuiltinTool(toolName, annotation);
       }),
     [toolInvocations, toolCallAnnotations],
@@ -385,6 +386,7 @@ const ToolCallsList = memo(({ toolInvocations, toolCallAnnotations, addToolResul
 
     const { toolName, toolCallId } = inv.toolInvocation;
     const annotation = toolCallAnnotations.find((a) => a.toolCallId === toolCallId);
+
     return !isBuiltinTool(toolName, annotation);
   });
 

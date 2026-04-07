@@ -113,6 +113,7 @@ export function createFetchWebsiteTool() {
       } catch (error: unknown) {
         const message = error instanceof Error ? error.message : String(error);
         logger.error(`Failed to fetch ${url}: ${message}`);
+
         return { error: `Failed to fetch website: ${message}` };
       }
     },

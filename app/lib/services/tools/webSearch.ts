@@ -96,8 +96,10 @@ export function createWebSearchTool(getApiKeys: () => Record<string, string>, ge
         .default(5)
         .describe('Number of search results to return (default: 5, max: 10)'),
     }),
+    // eslint-disable-next-line @typescript-eslint/naming-convention
     execute: async ({ query, num_results }) => {
       logger.debug(`Web search: "${query}"`);
+
       const numResults = Math.min(num_results, 10);
 
       try {
@@ -111,10 +113,12 @@ export function createWebSearchTool(getApiKeys: () => Record<string, string>, ge
         }
 
         const results = await searchWithDuckDuckGo(query, numResults);
+
         return { provider: 'duckduckgo', query, results };
       } catch (error: unknown) {
         const message = error instanceof Error ? error.message : String(error);
         logger.error(`Web search failed: ${message}`);
+
         return { error: `Search failed: ${message}`, query };
       }
     },

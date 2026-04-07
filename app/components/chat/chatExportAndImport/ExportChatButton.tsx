@@ -10,6 +10,7 @@ export const ExportChatButton = ({ exportChat, description }: { exportChat?: () 
   const handleSaveSite = async () => {
     setSaving(true);
     setSaveStatus('idle');
+
     try {
       const files = workbenchStore.files.get();
       const res = await fetch('/api/save-site', {
@@ -53,8 +54,27 @@ export const ExportChatButton = ({ exportChat, description }: { exportChat?: () 
             onClick={handleSaveSite}
             disabled={saving}
           >
-            <div className={classNames(saving ? 'i-ph:spinner animate-spin' : saveStatus === 'ok' ? 'i-ph:check-circle text-green-500' : saveStatus === 'err' ? 'i-ph:warning text-red-500' : 'i-ph:floppy-disk', 'size-4.5')} />
-            <span>{saving ? 'Sauvegarde...' : saveStatus === 'ok' ? 'Sauvegardé !' : saveStatus === 'err' ? 'Erreur' : 'Sauvegarder sur Limova'}</span>
+            <div
+              className={classNames(
+                saving
+                  ? 'i-ph:spinner animate-spin'
+                  : saveStatus === 'ok'
+                    ? 'i-ph:check-circle text-green-500'
+                    : saveStatus === 'err'
+                      ? 'i-ph:warning text-red-500'
+                      : 'i-ph:floppy-disk',
+                'size-4.5',
+              )}
+            />
+            <span>
+              {saving
+                ? 'Sauvegarde...'
+                : saveStatus === 'ok'
+                  ? 'Sauvegardé !'
+                  : saveStatus === 'err'
+                    ? 'Erreur'
+                    : 'Sauvegarder sur Limova'}
+            </span>
           </DropdownMenu.Item>
           <DropdownMenu.Item
             className={classNames(

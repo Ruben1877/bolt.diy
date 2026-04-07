@@ -341,7 +341,13 @@ export const Menu = () => {
           <a href="/" className="flex items-center gap-2 no-underline">
             <div className="w-6 h-6 rounded-md bg-accent-500 flex items-center justify-center flex-shrink-0">
               <svg width="12" height="12" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg">
-                <path d="M4 12L8 4L12 12" stroke="white" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" />
+                <path
+                  d="M4 12L8 4L12 12"
+                  stroke="white"
+                  strokeWidth="2.5"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                />
                 <line x1="5.5" y1="9.5" x2="10.5" y2="9.5" stroke="white" strokeWidth="1.5" strokeLinecap="round" />
               </svg>
             </div>
@@ -489,11 +495,13 @@ export const Menu = () => {
                 {dialogContent?.type === 'bulkDelete' && (
                   <>
                     <div className="p-6 bg-bolt-elements-background-depth-1">
-                      <DialogTitle className="text-bolt-elements-textPrimary">Supprimer les conversations ?</DialogTitle>
+                      <DialogTitle className="text-bolt-elements-textPrimary">
+                        Supprimer les conversations ?
+                      </DialogTitle>
                       <DialogDescription className="mt-2 text-bolt-elements-textSecondary">
                         <p>
-                          Vous allez supprimer {dialogContent.items.length}{' '}
-                          conversation{dialogContent.items.length > 1 ? 's' : ''} :
+                          Vous allez supprimer {dialogContent.items.length} conversation
+                          {dialogContent.items.length > 1 ? 's' : ''} :
                         </p>
                         <div className="mt-2 max-h-32 overflow-auto border border-bolt-elements-borderColor rounded-md bg-bolt-elements-background-depth-2 p-2">
                           <ul className="list-disc pl-5 space-y-1">

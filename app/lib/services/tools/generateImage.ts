@@ -4,12 +4,7 @@ import { createScopedLogger } from '~/utils/logger';
 
 const logger = createScopedLogger('tool:generate-image');
 
-async function generateWithOpenAI(
-  prompt: string,
-  apiKey: string,
-  width: number,
-  height: number,
-): Promise<string> {
+async function generateWithOpenAI(prompt: string, apiKey: string, width: number, height: number): Promise<string> {
   const size = `${width}x${height}` as '1024x1024' | '1792x1024' | '1024x1792';
   const validSizes = ['1024x1024', '1792x1024', '1024x1792'];
 
@@ -35,15 +30,11 @@ async function generateWithOpenAI(
   }
 
   const data = (await response.json()) as { data: Array<{ url: string }> };
+
   return data.data[0].url;
 }
 
-async function generateWithTogether(
-  prompt: string,
-  apiKey: string,
-  width: number,
-  height: number,
-): Promise<string> {
+async function generateWithTogether(prompt: string, apiKey: string, width: number, height: number): Promise<string> {
   const response = await fetch('https://api.together.xyz/v1/images/generations', {
     method: 'POST',
     headers: {
@@ -67,6 +58,7 @@ async function generateWithTogether(
   }
 
   const data = (await response.json()) as { data: Array<{ url: string }> };
+
   return data.data[0].url;
 }
 
@@ -119,6 +111,7 @@ export function createGenerateImageTool(getApiKeys: () => Record<string, string>
       } catch (error: unknown) {
         const message = error instanceof Error ? error.message : String(error);
         logger.error(`Image generation failed: ${message}`);
+
         return { error: `Image generation failed: ${message}` };
       }
     },

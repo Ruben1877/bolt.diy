@@ -1,5 +1,11 @@
 import { convertToCoreMessages, streamText as _streamText, type Message } from 'ai';
-import { MAX_TOKENS, PROVIDER_COMPLETION_LIMITS, isReasoningModel, getFixedTemperature, type FileMap } from './constants';
+import {
+  MAX_TOKENS,
+  PROVIDER_COMPLETION_LIMITS,
+  isReasoningModel,
+  getFixedTemperature,
+  type FileMap,
+} from './constants';
 import { getSystemPrompt } from '~/lib/common/prompts/prompts';
 import { DEFAULT_MODEL, DEFAULT_PROVIDER, MODIFICATIONS_TAG_NAME, PROVIDER_LIST, WORK_DIR } from '~/utils/constants';
 import type { IProviderSetting } from '~/types/model';
@@ -335,7 +341,10 @@ export async function streamText(props: {
     messages: convertToCoreMessages(processedMessages as any),
     ...filteredOptions,
 
-    ...((() => { const t = getFixedTemperature(modelDetails.name); return t !== null ? { temperature: t } : {}; })()),
+    ...(() => {
+      const t = getFixedTemperature(modelDetails.name);
+      return t !== null ? { temperature: t } : {};
+    })(),
   };
 
   // DEBUG: Log final streaming parameters

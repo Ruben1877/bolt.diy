@@ -121,7 +121,10 @@ export default function App() {
     const limovaUrl = import.meta.env.VITE_LIMOVA_URL || 'http://localhost:3000';
 
     const handler = async (e: MessageEvent) => {
-      if (e.origin !== limovaUrl) return;
+      if (e.origin !== limovaUrl) {
+        return;
+      }
+
       if (e.data?.type === 'bolt:refresh-token' && e.data?.token) {
         try {
           await fetch('/api/refresh-cookie', {
@@ -137,6 +140,7 @@ export default function App() {
     };
 
     window.addEventListener('message', handler);
+
     return () => window.removeEventListener('message', handler);
   }, []);
 

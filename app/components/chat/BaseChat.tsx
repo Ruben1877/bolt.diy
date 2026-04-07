@@ -105,7 +105,7 @@ export const BaseChat = React.forwardRef<HTMLDivElement, BaseChatProps>(
       enhancePrompt,
       sendMessage,
       handleStop,
-      importChat,
+      importChat: _importChat,
       exportChat,
       uploadedFiles = [],
       setUploadedFiles,
@@ -209,6 +209,8 @@ export const BaseChat = React.forwardRef<HTMLDivElement, BaseChatProps>(
         const timer = setTimeout(() => autoFixError(actionAlert), 1500);
         return () => clearTimeout(timer);
       }
+
+      return undefined;
     }, [actionAlert, isStreaming, autoFixError]);
 
     useEffect(() => {
@@ -392,7 +394,10 @@ export const BaseChat = React.forwardRef<HTMLDivElement, BaseChatProps>(
         <ClientOnly>{() => <Menu />}</ClientOnly>
         <div className="flex flex-col lg:flex-row overflow-y-auto overflow-x-hidden w-full h-full">
           <div
-            className={classNames(styles.Chat, 'flex flex-col flex-grow lg:min-w-[var(--chat-min-width)] h-full overflow-hidden relative')}
+            className={classNames(
+              styles.Chat,
+              'flex flex-col flex-grow lg:min-w-[var(--chat-min-width)] h-full overflow-hidden relative',
+            )}
             style={showWorkbench ? { maxWidth: 'var(--workbench-left)' } : undefined}
           >
             {!chatStarted && (
@@ -402,8 +407,22 @@ export const BaseChat = React.forwardRef<HTMLDivElement, BaseChatProps>(
                   <div className="flex justify-center mb-6 animate-fade-in">
                     <div className="w-14 h-14 rounded-2xl bg-accent-500 flex items-center justify-center shadow-lg shadow-accent-500/20">
                       <svg width="28" height="28" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg">
-                        <path d="M4 12L8 4L12 12" stroke="white" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
-                        <line x1="5.5" y1="9.5" x2="10.5" y2="9.5" stroke="white" strokeWidth="1.5" strokeLinecap="round" />
+                        <path
+                          d="M4 12L8 4L12 12"
+                          stroke="white"
+                          strokeWidth="2"
+                          strokeLinecap="round"
+                          strokeLinejoin="round"
+                        />
+                        <line
+                          x1="5.5"
+                          y1="9.5"
+                          x2="10.5"
+                          y2="9.5"
+                          stroke="white"
+                          strokeWidth="1.5"
+                          strokeLinecap="round"
+                        />
                       </svg>
                     </div>
                   </div>
@@ -482,9 +501,7 @@ export const BaseChat = React.forwardRef<HTMLDivElement, BaseChatProps>(
                   {llmErrorAlert && <LlmErrorAlert alert={llmErrorAlert} clearAlert={() => clearLlmErrorAlert?.()} />}
                 </div>
                 {progressAnnotations && <ProgressCompilation data={progressAnnotations} />}
-                {brandAssetsOpen && (
-                  <BrandAssetsPanel onClose={() => setBrandAssetsOpen(false)} />
-                )}
+                {brandAssetsOpen && <BrandAssetsPanel onClose={() => setBrandAssetsOpen(false)} />}
                 <ChatBox
                   isModelSettingsCollapsed={isModelSettingsCollapsed}
                   setIsModelSettingsCollapsed={setIsModelSettingsCollapsed}
@@ -535,14 +552,16 @@ export const BaseChat = React.forwardRef<HTMLDivElement, BaseChatProps>(
             {!chatStarted && (
               <div className="flex flex-col items-center gap-3 pb-8 relative z-1">
                 <div className="flex flex-wrap justify-center gap-2 max-w-chat mx-auto">
-                  {ExamplePrompts((event, messageInput) => {
-                    if (isStreaming) {
-                      handleStop?.();
-                      return;
-                    }
+                  <ExamplePrompts
+                    sendMessage={(event, messageInput) => {
+                      if (isStreaming) {
+                        handleStop?.();
+                        return;
+                      }
 
-                    handleSendMessage?.(event, messageInput);
-                  })}
+                      handleSendMessage?.(event, messageInput);
+                    }}
+                  />
                 </div>
               </div>
             )}

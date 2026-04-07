@@ -261,7 +261,9 @@ async function chatAction({ context, request }: ActionFunctionArgs) {
             }
           },
           onFinish: async ({ text: content, finishReason, usage }) => {
-            logger.info(`finishReason: ${finishReason}, completionTokens: ${usage?.completionTokens}, content tail: ${content?.slice(-200)}`);
+            logger.info(
+              `finishReason: ${finishReason}, completionTokens: ${usage?.completionTokens}, content tail: ${content?.slice(-200)}`,
+            );
 
             if (usage) {
               cumulativeUsage.completionTokens += usage.completionTokens || 0;

@@ -144,10 +144,6 @@ export const Preview = memo(({ setSelectedElement }: PreviewProps) => {
     };
   }, []);
 
-  const toggleDeviceMode = () => {
-    setIsDeviceModeOn((prev) => !prev);
-  };
-
   const startResizing = (e: React.PointerEvent, side: ResizeSide) => {
     if (!isDeviceModeOn) {
       return;

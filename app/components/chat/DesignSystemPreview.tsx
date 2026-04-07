@@ -20,6 +20,7 @@ function getContrastColor(hex: string): string {
   const g = parseInt(hex.slice(3, 5), 16);
   const b = parseInt(hex.slice(5, 7), 16);
   const luminance = (0.299 * r + 0.587 * g + 0.114 * b) / 255;
+
   return luminance > 0.5 ? '#000000' : '#FFFFFF';
 }
 
@@ -48,7 +49,11 @@ export const DesignSystemPreview = memo(({ designSystem, compact = false }: Desi
       <div className="flex items-center gap-3 p-3 rounded-xl bg-bolt-elements-background-depth-3 border border-bolt-elements-borderColor">
         <div className="flex gap-0.5">
           {designSystem.palette.slice(0, 5).map((c, i) => (
-            <div key={i} className="w-5 h-5 rounded first:rounded-l-lg last:rounded-r-lg" style={{ backgroundColor: c.hex }} />
+            <div
+              key={i}
+              className="w-5 h-5 rounded first:rounded-l-lg last:rounded-r-lg"
+              style={{ backgroundColor: c.hex }}
+            />
           ))}
         </div>
         <div className="text-xs text-bolt-elements-textSecondary">
@@ -120,10 +125,7 @@ export const DesignSystemPreview = memo(({ designSystem, compact = false }: Desi
                 className="flex-1 h-14 flex flex-col items-center justify-center transition-all hover:flex-[1.5] cursor-default"
                 style={{ backgroundColor: color.hex }}
               >
-                <span
-                  className="text-[9px] font-bold opacity-80"
-                  style={{ color: getContrastColor(color.hex) }}
-                >
+                <span className="text-[9px] font-bold opacity-80" style={{ color: getContrastColor(color.hex) }}>
                   {color.hex}
                 </span>
               </div>

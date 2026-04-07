@@ -12,9 +12,5 @@ export function HeaderActionButtons({ chatStarted: _chatStarted }: HeaderActionB
   const previews = useStore(workbenchStore.previews);
   const activePreview = previews[activePreviewIndex];
 
-  return (
-    <div className="flex items-center gap-2">
-      {activePreview && <DeployButton />}
-    </div>
-  );
+  return <div className="flex items-center gap-2">{activePreview && <DeployButton />}</div>;
 }

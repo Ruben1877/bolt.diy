@@ -19,11 +19,16 @@ function buildPrompt(profession: string): string {
   return `Crée-moi un site vitrine complet et professionnel pour un ${profession}. Inclus une page d'accueil avec hero section, une section services, une section à propos, des témoignages clients, et un formulaire de contact. Design moderne et épuré.`;
 }
 
-export function ExamplePrompts(sendMessage?: { (event: React.UIEvent, messageInput?: string): void | undefined }) {
+interface ExamplePromptsProps {
+  sendMessage?: (event: React.UIEvent, messageInput?: string) => void;
+}
+
+export function ExamplePrompts({ sendMessage }: ExamplePromptsProps) {
   const [customValue, setCustomValue] = useState('');
 
   const handleCustomSubmit = (e: React.FormEvent) => {
     e.preventDefault();
+
     if (customValue.trim()) {
       sendMessage?.(e as unknown as React.UIEvent, buildPrompt(customValue.trim()));
     }
@@ -31,9 +36,7 @@ export function ExamplePrompts(sendMessage?: { (event: React.UIEvent, messageInp
 
   return (
     <div id="examples" className="relative w-full max-w-2xl mx-auto mt-4 flex flex-col items-center gap-3">
-      <p className="text-bolt-elements-textSecondary text-xs font-medium">
-        Créer un site vitrine pour un...
-      </p>
+      <p className="text-bolt-elements-textSecondary text-xs font-medium">Créer un site vitrine pour un...</p>
       <div className="flex flex-wrap justify-center gap-2">
         {PROFESSIONS.map((prof, index) => (
           <button

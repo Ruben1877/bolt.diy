@@ -7,7 +7,10 @@ import { Header } from '~/components/header/Header';
 import BackgroundRays from '~/components/ui/BackgroundRays';
 
 export const meta: MetaFunction = () => {
-  return [{ title: 'AXTRAAI' }, { name: 'description', content: 'Créez votre site web avec AXTRAAI, votre assistant IA' }];
+  return [
+    { title: 'AXTRAAI' },
+    { name: 'description', content: 'Créez votre site web avec AXTRAAI, votre assistant IA' },
+  ];
 };
 
 export const loader = async ({ request }: LoaderFunctionArgs) => {
@@ -19,6 +22,7 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
     const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY as string;
 
     let valid = false;
+
     try {
       const res = await fetch(`${supabaseUrl}/auth/v1/user`, {
         headers: {

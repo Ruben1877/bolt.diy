@@ -15,11 +15,7 @@ function getScreenshotUrl(siteUrl: string, width = 1280): string {
   return `https://image.thum.io/get/width/${width}/crop/900/noanimate/${encodeURIComponent(siteUrl)}`;
 }
 
-async function searchDesigns(
-  query: string,
-  numResults: number,
-  tavilyKey?: string,
-): Promise<DesignResult[]> {
+async function searchDesigns(query: string, numResults: number, tavilyKey?: string): Promise<DesignResult[]> {
   const searchQuery = `best ${query} website design examples`;
 
   if (tavilyKey) {
@@ -120,10 +116,7 @@ async function searchWithDuckDuckGo(query: string, numResults: number): Promise<
   return results;
 }
 
-export function createDesignInspirationTool(
-  getApiKeys: () => Record<string, string>,
-  getEnv: () => Env | undefined,
-) {
+export function createDesignInspirationTool(getApiKeys: () => Record<string, string>, getEnv: () => Env | undefined) {
   return tool({
     description:
       'Search for real website designs in a specific industry/niche and return screenshots for the user to choose from. ' +
@@ -139,14 +132,12 @@ export function createDesignInspirationTool(
         .string()
         .optional()
         .describe('Optional style preference (e.g. "modern", "minimalist", "luxury", "colorful")'),
-      num_results: z
-        .number()
-        .optional()
-        .default(3)
-        .describe('Number of design options to show (default: 3, max: 5)'),
+      num_results: z.number().optional().default(3).describe('Number of design options to show (default: 3, max: 5)'),
     }),
+    // eslint-disable-next-line @typescript-eslint/naming-convention
     execute: async ({ niche, style, num_results }) => {
       logger.debug(`Design inspiration search: niche="${niche}", style="${style || 'any'}"`);
+
       const numResults = Math.min(num_results, 5);
       const query = style ? `${style} ${niche}` : niche;
 
@@ -192,6 +183,7 @@ export function createDesignInspirationTool(
       } catch (error: unknown) {
         const message = error instanceof Error ? error.message : String(error);
         logger.error(`Design inspiration search failed: ${message}`);
+
         return { success: false, error: `Search failed: ${message}`, niche };
       }
     },

@@ -59,11 +59,7 @@ interface ChatBoxProps {
 
 export const ChatBox: React.FC<ChatBoxProps> = (props) => {
   return (
-    <div
-      className={classNames(
-        'relative w-full max-w-chat mx-auto z-prompt',
-      )}
-    >
+    <div className={classNames('relative w-full max-w-chat mx-auto z-prompt')}>
       <div
         className={classNames(
           'relative bg-bolt-elements-background-depth-1 rounded-2xl',
@@ -174,11 +170,7 @@ export const ChatBox: React.FC<ChatBoxProps> = (props) => {
             minHeight: props.TEXTAREA_MIN_HEIGHT,
             maxHeight: props.TEXTAREA_MAX_HEIGHT,
           }}
-          placeholder={
-            props.chatStarted
-              ? 'Apportez des modifications...'
-              : 'Décrivez votre prochain projet...'
-          }
+          placeholder={props.chatStarted ? 'Apportez des modifications...' : 'Décrivez votre prochain projet...'}
           translate="no"
         />
         <ClientOnly>
@@ -248,9 +240,13 @@ export const ChatBox: React.FC<ChatBoxProps> = (props) => {
           <div className="flex-1" />
           {props.input.length > 3 && (
             <div className="text-[11px] text-bolt-elements-textTertiary">
-              <kbd className="px-1.5 py-0.5 rounded bg-bolt-elements-background-depth-2 text-bolt-elements-textTertiary border border-bolt-elements-borderColor">Shift</kbd>
+              <kbd className="px-1.5 py-0.5 rounded bg-bolt-elements-background-depth-2 text-bolt-elements-textTertiary border border-bolt-elements-borderColor">
+                Shift
+              </kbd>
               {' + '}
-              <kbd className="px-1.5 py-0.5 rounded bg-bolt-elements-background-depth-2 text-bolt-elements-textTertiary border border-bolt-elements-borderColor">Entrée</kbd>
+              <kbd className="px-1.5 py-0.5 rounded bg-bolt-elements-background-depth-2 text-bolt-elements-textTertiary border border-bolt-elements-borderColor">
+                Entrée
+              </kbd>
               {' nouvelle ligne'}
             </div>
           )}

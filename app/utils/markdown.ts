@@ -91,14 +91,7 @@ const rehypeSanitizeOptions: RehypeSanitizeOptions = {
 
       // ['className', '__boltThought__']
     ],
-    img: [
-      ...(defaultSchema.attributes?.img ?? []),
-      'src',
-      'alt',
-      'width',
-      'height',
-      'loading',
-    ],
+    img: [...(defaultSchema.attributes?.img ?? []), 'src', 'alt', 'width', 'height', 'loading'],
     button: [
       ...(defaultSchema.attributes?.button ?? []),
       'data*',

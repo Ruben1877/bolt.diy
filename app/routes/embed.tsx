@@ -17,6 +17,7 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
     const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY as string;
 
     let valid = false;
+
     try {
       const res = await fetch(`${supabaseUrl}/auth/v1/user`, {
         headers: { Authorization: `Bearer ${token}`, apikey: supabaseAnonKey },

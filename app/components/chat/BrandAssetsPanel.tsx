@@ -30,6 +30,7 @@ export const BrandAssetsPanel = memo(({ onClose }: { onClose: () => void }) => {
 
   const handleLogoDrop = useCallback(async (e: React.DragEvent) => {
     e.preventDefault();
+
     const uris = await readFilesAsDataUri(e.dataTransfer.files);
 
     if (uris[0]) {
@@ -53,6 +54,7 @@ export const BrandAssetsPanel = memo(({ onClose }: { onClose: () => void }) => {
 
   const handlePhotosDrop = useCallback(async (e: React.DragEvent) => {
     e.preventDefault();
+
     const uris = await readFilesAsDataUri(e.dataTransfer.files);
 
     if (uris.length) {

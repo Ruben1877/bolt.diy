@@ -99,7 +99,7 @@ export const ChatImpl = memo(
     const [chatStarted, setChatStarted] = useState(initialMessages.length > 0);
     const [uploadedFiles, setUploadedFiles] = useState<File[]>([]);
     const [imageDataList, setImageDataList] = useState<string[]>([]);
-    const [uploadedImagePaths, setUploadedImagePaths] = useState<string[]>([]);
+    const [, setUploadedImagePaths] = useState<string[]>([]);
     const pendingImagesRef = useRef<Array<{ name: string; data: string }>>([]);
     const [searchParams, setSearchParams] = useSearchParams();
     const [fakeLoading, setFakeLoading] = useState(false);
@@ -367,53 +367,50 @@ export const ChatImpl = memo(
       return parts;
     };
 
-    const writeImagesToWebContainer = useCallback(
-      async (files: File[], dataList: string[]): Promise<string[]> => {
-        const paths: string[] = [];
-        const filesMap = workbenchStore.files.get();
-        const hasProject = Object.keys(filesMap).length > 0;
+    const writeImagesToWebContainer = useCallback(async (files: File[], dataList: string[]): Promise<string[]> => {
+      const paths: string[] = [];
+      const filesMap = workbenchStore.files.get();
+      const hasProject = Object.keys(filesMap).length > 0;
 
-        for (let i = 0; i < files.length; i++) {
-          const file = files[i];
-          const base64Data = dataList[i];
+      for (let i = 0; i < files.length; i++) {
+        const file = files[i];
+        const base64Data = dataList[i];
 
-          if (!file || !base64Data) {
-            continue;
-          }
-
-          const ext = file.name.includes('.') ? file.name.split('.').pop() : 'jpg';
-          const baseName = file.name.includes('.') ? file.name.slice(0, file.name.lastIndexOf('.')) : file.name;
-          const slug = sanitizeFileName(baseName);
-          const ts = Date.now().toString(36).slice(-4);
-          const filename = `${slug}-${ts}.${ext}`;
-          const webPath = `/images/${filename}`;
-
-          if (!hasProject) {
-            pendingImagesRef.current.push({ name: filename, data: base64Data });
-            paths.push(webPath);
-            continue;
-          }
-
-          try {
-            const raw = base64Data.replace(/^data:[^;]+;base64,/, '');
-            const binaryStr = atob(raw);
-            const bytes = new Uint8Array(binaryStr.length);
-
-            for (let j = 0; j < binaryStr.length; j++) {
-              bytes[j] = binaryStr.charCodeAt(j);
-            }
-
-            await workbenchStore.createFile(`${WORK_DIR}/public/images/${filename}`, bytes);
-            paths.push(webPath);
-          } catch (err) {
-            logger.error('Failed to write image to WebContainer', err);
-          }
+        if (!file || !base64Data) {
+          continue;
         }
 
-        return paths;
-      },
-      [],
-    );
+        const ext = file.name.includes('.') ? file.name.split('.').pop() : 'jpg';
+        const baseName = file.name.includes('.') ? file.name.slice(0, file.name.lastIndexOf('.')) : file.name;
+        const slug = sanitizeFileName(baseName);
+        const ts = Date.now().toString(36).slice(-4);
+        const filename = `${slug}-${ts}.${ext}`;
+        const webPath = `/images/${filename}`;
+
+        if (!hasProject) {
+          pendingImagesRef.current.push({ name: filename, data: base64Data });
+          paths.push(webPath);
+          continue;
+        }
+
+        try {
+          const raw = base64Data.replace(/^data:[^;]+;base64,/, '');
+          const binaryStr = atob(raw);
+          const bytes = new Uint8Array(binaryStr.length);
+
+          for (let j = 0; j < binaryStr.length; j++) {
+            bytes[j] = binaryStr.charCodeAt(j);
+          }
+
+          await workbenchStore.createFile(`${WORK_DIR}/public/images/${filename}`, bytes);
+          paths.push(webPath);
+        } catch (err) {
+          logger.error('Failed to write image to WebContainer', err);
+        }
+      }
+
+      return paths;
+    }, []);
 
     const flushPendingImages = useCallback(async () => {
       if (pendingImagesRef.current.length === 0) {

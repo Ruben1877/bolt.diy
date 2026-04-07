@@ -7,7 +7,10 @@ import { Header } from '~/components/header/Header';
 import BackgroundRays from '~/components/ui/BackgroundRays';
 
 export const meta: MetaFunction = () => {
-  return [{ title: 'AXTRAAI' }, { name: 'description', content: 'Créez votre site web avec AXTRAAI, votre assistant IA' }];
+  return [
+    { title: 'AXTRAAI' },
+    { name: 'description', content: 'Créez votre site web avec AXTRAAI, votre assistant IA' },
+  ];
 };
 
 export async function loader(args: LoaderFunctionArgs) {

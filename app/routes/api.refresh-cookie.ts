@@ -6,8 +6,9 @@ export const action = async ({ request }: ActionFunctionArgs) => {
   }
 
   let token: string | undefined;
+
   try {
-    const body = await request.json() as { token?: string };
+    const body = (await request.json()) as { token?: string };
     token = body.token;
   } catch {
     return new Response(JSON.stringify({ error: 'Invalid JSON' }), { status: 400 });
@@ -21,6 +22,7 @@ export const action = async ({ request }: ActionFunctionArgs) => {
   const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY as string;
 
   let valid = false;
+
   try {
     const res = await fetch(`${supabaseUrl}/auth/v1/user`, {
       headers: {

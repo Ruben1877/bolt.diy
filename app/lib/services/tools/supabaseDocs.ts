@@ -16,16 +16,13 @@ export function createSupabaseDocsSearchTool() {
 
       try {
         const encoded = encodeURIComponent(query);
-        const response = await fetch(
-          `https://supabase.com/docs/api/search?query=${encoded}`,
-          {
-            headers: {
-              Accept: 'application/json',
-              'User-Agent': 'Mozilla/5.0 (compatible; BoltAssistant/1.0)',
-            },
-            signal: AbortSignal.timeout(10000),
+        const response = await fetch(`https://supabase.com/docs/api/search?query=${encoded}`, {
+          headers: {
+            Accept: 'application/json',
+            'User-Agent': 'Mozilla/5.0 (compatible; BoltAssistant/1.0)',
           },
-        );
+          signal: AbortSignal.timeout(10000),
+        });
 
         if (!response.ok) {
           // Fallback: construct useful doc links from the query
@@ -55,6 +52,7 @@ export function createSupabaseDocsSearchTool() {
       } catch (error: unknown) {
         const message = error instanceof Error ? error.message : String(error);
         logger.error(`Supabase docs search failed: ${message}`);
+
         return buildFallbackResults(query);
       }
     },
