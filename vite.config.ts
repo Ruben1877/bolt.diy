@@ -90,6 +90,15 @@ function chrome129IssuePlugin() {
     name: 'chrome129IssuePlugin',
     configureServer(server: ViteDevServer) {
       server.middlewares.use((req, res, next) => {
+        // Allow /embed to be loaded in a cross-origin iframe by overriding COOP after Remix sets it
+        if (req.url === '/embed' || req.url?.startsWith('/embed?')) {
+          const origWriteHead = res.writeHead.bind(res) as typeof res.writeHead;
+          (res as any).writeHead = function (statusCode: number, ...args: any[]) {
+            res.setHeader('Cross-Origin-Opener-Policy', 'same-origin-allow-popups');
+            return origWriteHead(statusCode, ...args);
+          };
+        }
+
         const raw = req.headers['user-agent']?.match(/Chrom(e|ium)\/([0-9]+)\./);
 
         if (raw) {

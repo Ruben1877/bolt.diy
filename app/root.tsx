@@ -118,6 +118,29 @@ export default function App() {
   const theme = useStore(themeStore);
 
   useEffect(() => {
+    const limovaUrl = import.meta.env.VITE_LIMOVA_URL || 'http://localhost:3000';
+
+    const handler = async (e: MessageEvent) => {
+      if (e.origin !== limovaUrl) return;
+      if (e.data?.type === 'bolt:refresh-token' && e.data?.token) {
+        try {
+          await fetch('/api/refresh-cookie', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            credentials: 'include',
+            body: JSON.stringify({ token: e.data.token }),
+          });
+        } catch (err) {
+          console.error('[bolt] Failed to refresh cookie:', err);
+        }
+      }
+    };
+
+    window.addEventListener('message', handler);
+    return () => window.removeEventListener('message', handler);
+  }, []);
+
+  useEffect(() => {
     logStore.logSystem('Application initialized', {
       theme,
       platform: navigator.platform,

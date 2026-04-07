@@ -1,8 +1,32 @@
 import * as DropdownMenu from '@radix-ui/react-dropdown-menu';
+import { useState } from 'react';
 import { workbenchStore } from '~/lib/stores/workbench';
 import { classNames } from '~/utils/classNames';
 
-export const ExportChatButton = ({ exportChat }: { exportChat?: () => void }) => {
+export const ExportChatButton = ({ exportChat, description }: { exportChat?: () => void; description?: string }) => {
+  const [saving, setSaving] = useState(false);
+  const [saveStatus, setSaveStatus] = useState<'idle' | 'ok' | 'err'>('idle');
+
+  const handleSaveSite = async () => {
+    setSaving(true);
+    setSaveStatus('idle');
+    try {
+      const files = workbenchStore.files.get();
+      const res = await fetch('/api/save-site', {
+        method: 'POST',
+        credentials: 'include',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ name: description || 'Mon site', files }),
+      });
+      setSaveStatus(res.ok ? 'ok' : 'err');
+    } catch {
+      setSaveStatus('err');
+    } finally {
+      setSaving(false);
+      setTimeout(() => setSaveStatus('idle'), 3000);
+    }
+  };
+
   return (
     <div className="flex border border-bolt-elements-borderColor rounded-md overflow-hidden">
       <DropdownMenu.Root>
@@ -22,6 +46,16 @@ export const ExportChatButton = ({ exportChat }: { exportChat?: () => void }) =>
           sideOffset={5}
           align="end"
         >
+          <DropdownMenu.Item
+            className={classNames(
+              'cursor-pointer flex items-center w-full px-4 py-2 text-sm text-bolt-elements-textPrimary hover:bg-bolt-elements-item-backgroundActive gap-2 rounded-md group relative',
+            )}
+            onClick={handleSaveSite}
+            disabled={saving}
+          >
+            <div className={classNames(saving ? 'i-ph:spinner animate-spin' : saveStatus === 'ok' ? 'i-ph:check-circle text-green-500' : saveStatus === 'err' ? 'i-ph:warning text-red-500' : 'i-ph:floppy-disk', 'size-4.5')} />
+            <span>{saving ? 'Sauvegarde...' : saveStatus === 'ok' ? 'Sauvegardé !' : saveStatus === 'err' ? 'Erreur' : 'Sauvegarder sur Limova'}</span>
+          </DropdownMenu.Item>
           <DropdownMenu.Item
             className={classNames(
               'cursor-pointer flex items-center w-auto px-4 py-2 text-sm text-bolt-elements-textPrimary hover:bg-bolt-elements-item-backgroundActive gap-2 rounded-md group relative',
