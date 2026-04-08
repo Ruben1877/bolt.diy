@@ -12,6 +12,9 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
   const url = new URL(request.url);
   const token = url.searchParams.get('token');
 
+  // chatId passé par Limova pour restaurer une conversation existante
+  const chatId = url.searchParams.get('chatId') ?? undefined;
+
   if (token) {
     const supabaseUrl = import.meta.env.VITE_SUPABASE_URL as string;
     const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY as string;
@@ -40,12 +43,15 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
     const cleanUrl = new URL(request.url);
     cleanUrl.searchParams.delete('token');
 
+    // Conserver chatId dans l'URL après redirect
+
     return redirect(cleanUrl.toString(), {
       headers: { 'Set-Cookie': `sb-access-token=${token}; ${cookieFlags}` },
     });
   }
 
-  return json({});
+  // Retourner chatId comme `id` pour que useChatHistory puisse charger la conversation
+  return json({ id: chatId });
 };
 
 export default function Embed() {

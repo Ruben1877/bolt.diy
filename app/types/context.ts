@@ -15,6 +15,7 @@ export type ProgressAnnotation = {
   status: 'in-progress' | 'complete';
   order: number;
   message: string;
+  cardTitle?: string;
 };
 
 export type ToolCallAnnotation = {

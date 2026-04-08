@@ -626,6 +626,7 @@ async function findAwardWinningSites(niche: string, tavilyKey: string): Promise<
   return allUrls.slice(0, 4);
 }
 
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
 async function collectScreenshots(
   niche: string,
   typographyStyle?: string,
@@ -696,10 +697,11 @@ async function collectScreenshots(
   return validated;
 }
 
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
 async function fetchScreenshotAsBase64(screenshotUrl: string): Promise<string | null> {
   try {
     const resp = await fetch(screenshotUrl, {
-      signal: AbortSignal.timeout(15000),
+      signal: AbortSignal.timeout(8000),
     });
 
     if (!resp.ok) {
@@ -1072,9 +1074,11 @@ export async function callStitchMCP(apiKey: string, toolName: string, args: Reco
 
     const sessionHeader = initResp.headers.get('mcp-session-id');
 
+    // StatelessServer ne renvoie pas de session ID — on utilise un sentinel pour éviter la ré-init à chaque appel
+    mcpSessionId = sessionHeader || 'stateless';
+
     if (sessionHeader) {
-      mcpSessionId = sessionHeader;
-      headers['Mcp-Session-Id'] = mcpSessionId;
+      headers['Mcp-Session-Id'] = sessionHeader;
     }
 
     const initBody = await initResp.text();
@@ -1085,22 +1089,6 @@ export async function callStitchMCP(apiKey: string, toolName: string, args: Reco
       headers,
       body: JSON.stringify({ jsonrpc: '2.0', method: 'notifications/initialized' }),
     });
-
-    const listResp = await fetch(STITCH_MCP_URL, {
-      method: 'POST',
-      headers,
-      body: JSON.stringify({ jsonrpc: '2.0', id: 2, method: 'tools/list' }),
-    });
-    const listJson = (await listResp.json()) as { result?: { tools?: any[] } };
-    const toolsList = listJson?.result?.tools || [];
-    const toolNames = toolsList.map((t: any) => t.name);
-    logger.info(`MCP available tools: ${JSON.stringify(toolNames)}`);
-
-    for (const t of toolsList) {
-      if (t.name === 'generate_variants' || t.name === 'generate_screen_from_text' || t.name === 'get_screen') {
-        logger.info(`Tool "${t.name}" inputSchema: ${JSON.stringify(t.inputSchema).slice(0, 2000)}`);
-      }
-    }
   }
 
   logger.info(`Calling MCP tool: ${toolName}`);
@@ -1307,7 +1295,7 @@ export function createStitchDesignTool(
       'Generate professional website mockups using Google Stitch AI. ' +
       'Creates 2 design variants based on a creative brief. ' +
       'Screenshots award-winning websites as visual references and feeds them to Stitch for inspiration. ' +
-      'Users can provide their own reference_urls of websites they find beautiful. ' +
+      'Users can provide their own _reference_urls of websites they find beautiful. ' +
       'Returns screenshot previews, HTML for each variant, and a design system (palette, typography, features). ' +
       'Use when a user asks to create a website for a business.',
     parameters: z.object({
@@ -1336,7 +1324,7 @@ export function createStitchDesignTool(
         .string()
         .optional()
         .describe('Additional style notes from the user (e.g. "luxurious feel", "playful and colorful")'),
-      reference_urls: z
+      _reference_urls: z
         .array(z.string().url())
         .optional()
         .describe(
@@ -1344,23 +1332,30 @@ export function createStitchDesignTool(
         ),
     }),
     // eslint-disable-next-line @typescript-eslint/naming-convention
-    execute: async ({ niche, business_name, colors, typography_style, style_description, reference_urls }) => {
+    execute: async ({ niche, business_name, colors, typography_style, style_description, _reference_urls }) => {
       logger.info(`Stitch design: niche="${niche}", business="${business_name || 'unnamed'}"`);
 
       const ds = getDataStream?.();
       const keepAlive = getKeepAlive?.();
       let progressOrder = 100;
 
-      const emitProgress = (label: string, status: 'in-progress' | 'complete', message: string) => {
+      const emitProgress = (label: string, status: 'in-progress' | 'complete', message: string, cardTitle?: string) => {
         try {
-          ds?.writeData({ type: 'progress', label, status, order: progressOrder++, message });
+          ds?.writeData({
+            type: 'progress',
+            label,
+            status,
+            order: progressOrder++,
+            message,
+            ...(cardTitle ? { cardTitle } : {}),
+          });
           keepAlive?.();
         } catch {
           /* stream may be closed */
         }
       };
 
-      const withHeartbeat = async <T>(promise: Promise<T>, intervalMs = 30_000): Promise<T> => {
+      const withHeartbeat = async <T>(promise: Promise<T>, intervalMs = 15_000): Promise<T> => {
         const timer = setInterval(() => {
           keepAlive?.();
         }, intervalMs);
@@ -1410,13 +1405,20 @@ export function createStitchDesignTool(
       }
 
       try {
-        mcpSessionId = null;
-
         const tavilyKey = apiKeys?.TAVILY_API_KEY || (env as unknown as Record<string, string>)?.TAVILY_API_KEY;
 
-        emitProgress('stitch', 'in-progress', "Analyse du projet et recherche d'inspiration...");
+        const cardTitle = business_name || `Site ${niche}`;
 
-        const [projectRaw, designRefs, screenshots, brief] = await Promise.all([
+        // ── Étape 1 : Analyse & références ──────────────────────────────
+        emitProgress(
+          'stitch-1',
+          'in-progress',
+          `Analyse du secteur "${niche}" & recherche de références design…`,
+          cardTitle,
+        );
+
+        // Phase 1 — tout en parallèle : projet + refs design
+        const [projectRaw, designRefs] = await Promise.all([
           (async () => {
             const title = business_name || `${niche} website`;
             logger.info(`Creating Stitch project: "${title}"`);
@@ -1424,133 +1426,85 @@ export function createStitchDesignTool(
             return callStitchMCP(stitchKey, 'create_project', { title });
           })(),
           fetchDesignReferences(niche, tavilyKey || undefined),
-          collectScreenshots(niche, typography_style, reference_urls, tavilyKey || undefined),
-          (async () => buildCreativeBrief(niche, business_name, colors, typography_style, style_description, []))(),
         ]);
 
         const projectId = extractProjectId(projectRaw);
         logger.info(`Project created: ${projectId}`);
-        logger.debug(`Project raw: ${JSON.stringify(projectRaw).slice(0, 500)}`);
 
         if (!projectId) {
           throw new Error(`Could not extract projectId from: ${JSON.stringify(projectRaw).slice(0, 300)}`);
         }
 
-        emitProgress('stitch', 'in-progress', 'Références collectées, génération du design principal...');
+        // ── Étape 1 → terminée ──────────────────────────────────────────
+        emitProgress(
+          'stitch-1',
+          'complete',
+          `Analyse du secteur "${niche}" & recherche de références design`,
+          cardTitle,
+        );
 
-        const briefWithRefs =
-          designRefs.length > 0
-            ? buildCreativeBrief(niche, business_name, colors, typography_style, style_description, designRefs)
-            : brief;
+        // ── Étape 2 : Concept visuel ─────────────────────────────────────
+        emitProgress(
+          'stitch-2',
+          'in-progress',
+          'Définition du concept visuel — couleurs, typographies & ambiance…',
+          cardTitle,
+        );
 
-        /*
-         * Strategy: try generate_screen_from_image with a real website screenshot first,
-         * fall back to generate_screen_from_text if no screenshot or if image tool fails
-         */
-        let screenRaw: any = null;
-        let usedImageRef = false;
-
-        if (screenshots.length > 0) {
-          logger.info(`Attempting generate_screen_from_image with ${screenshots.length} screenshot(s)...`);
-
-          const bestScreenshot = screenshots[0];
-
-          try {
-            const base64Data = await fetchScreenshotAsBase64(bestScreenshot.screenshotUrl);
-
-            if (base64Data) {
-              logger.info(
-                `Screenshot fetched as base64 (${Math.round(base64Data.length / 1024)}KB), calling generate_screen_from_image...`,
-              );
-
-              const imagePrompt = [
-                briefWithRefs,
-                '',
-                `RÉFÉRENCE VISUELLE PRINCIPALE :`,
-                `Ce screenshot provient de ${bestScreenshot.sourceUrl}.`,
-                `Pourquoi cette référence : ${bestScreenshot.why}`,
-                '',
-                "INSTRUCTIONS D'UTILISATION DE LA RÉFÉRENCE :",
-                '- Analyse la STRUCTURE du layout : comment les sections sont organisées, la hiérarchie visuelle, les espacements',
-                '- Reprends les PATTERNS qui fonctionnent : navigation, hero, grids, cards, CTAs, footer',
-                '- Note la QUALITÉ : ombres, border-radius, transitions, micro-détails',
-                '- Mais ADAPTE tout au contexte de notre client français : contenu en français, niche spécifique, palette de couleurs du brief',
-                '- Le résultat final doit être SUPÉRIEUR visuellement à cette référence — plus moderne, plus soigné, plus cohérent',
-              ].join('\n');
-
-              screenRaw = await withHeartbeat(
-                callStitchMCP(stitchKey, 'generate_screen_from_image', {
-                  projectId,
-                  imageUri: base64Data,
-                  prompt: imagePrompt,
-                  deviceType: 'DESKTOP',
-                  modelId: 'GEMINI_3_1_PRO',
-                }),
-              );
-              usedImageRef = true;
-              logger.info('generate_screen_from_image succeeded!');
-            }
-          } catch (imgErr) {
-            logger.warn(`generate_screen_from_image failed: ${imgErr instanceof Error ? imgErr.message : imgErr}`);
-            logger.info('Falling back to generate_screen_from_text...');
-          }
-        }
-
-        if (!screenRaw) {
-          let enhancedBrief = briefWithRefs;
-
-          if (screenshots.length > 0) {
-            const screenshotRefs = screenshots.map((s) => `- ${s.sourceUrl} → ${s.why}`).join('\n');
-            enhancedBrief += [
-              '',
-              '',
-              'SITES DE RÉFÉRENCE VISUELS (analyse ces sites et inspire-toi de leurs meilleurs éléments) :',
-              screenshotRefs,
-              '',
-              'Pour chaque référence, reprends : la structure du layout, les patterns de navigation, la hiérarchie des sections, les micro-détails (ombres, radius, spacing).',
-              'Combine le meilleur de chaque référence et crée quelque chose de SUPÉRIEUR. Adapte tout au contexte français du client.',
-            ].join('\n');
-          }
-
-          logger.info(`Generating base screen via text prompt...`);
-          screenRaw = await withHeartbeat(
-            callStitchMCP(stitchKey, 'generate_screen_from_text', {
-              projectId,
-              prompt: enhancedBrief,
-              deviceType: 'DESKTOP',
-              modelId: 'GEMINI_3_1_PRO',
-            }),
+        // Timers pour les étapes 2 → 3 → 4 pendant l'appel Gemini (~90s)
+        const timer2to3 = setTimeout(() => {
+          emitProgress('stitch-2', 'complete', 'Concept visuel — couleurs, typographies & ambiance', cardTitle);
+          emitProgress(
+            'stitch-3',
+            'in-progress',
+            'Architecture des sections — hero, services, témoignages, contact…',
+            cardTitle,
           );
-        }
+        }, 13000);
 
-        logger.debug(`Screen raw (full): ${JSON.stringify(screenRaw).slice(0, 3000)}`);
-        logger.debug(`Screen raw keys: ${JSON.stringify(Object.keys(screenRaw || {}))}`);
+        const timer3to4 = setTimeout(() => {
+          emitProgress(
+            'stitch-3',
+            'complete',
+            'Architecture des sections — hero, services, témoignages, contact',
+            cardTitle,
+          );
+          emitProgress('stitch-4', 'in-progress', 'Génération du design complet avec Gemini AI…', cardTitle);
+        }, 33000);
 
-        if (screenRaw?.outputComponents) {
-          logger.debug(`outputComponents count: ${screenRaw.outputComponents.length}`);
+        const briefWithRefs = buildCreativeBrief(
+          niche,
+          business_name,
+          colors,
+          typography_style,
+          style_description,
+          designRefs.length > 0 ? designRefs : [],
+        );
 
-          for (let ci = 0; ci < screenRaw.outputComponents.length; ci++) {
-            const comp = screenRaw.outputComponents[ci];
-            logger.debug(`outputComponents[${ci}] keys: ${JSON.stringify(Object.keys(comp || {}))}`);
+        // ── Phase 2 — génération principale (seul appel AI lourd) ────────
+        logger.info('Generating base screen...');
 
-            if (comp?.name) {
-              logger.debug(`outputComponents[${ci}].name: ${comp.name}`);
-            }
+        const screenRaw = await withHeartbeat(
+          callStitchMCP(stitchKey, 'generate_screen_from_text', {
+            projectId,
+            prompt: briefWithRefs,
+            deviceType: 'DESKTOP',
+            modelId: 'GEMINI_3_FLASH',
+          }),
+        );
 
-            if (comp?.design) {
-              logger.debug(`outputComponents[${ci}].design keys: ${JSON.stringify(Object.keys(comp.design))}`);
-              logger.debug(`outputComponents[${ci}].design: ${JSON.stringify(comp.design).slice(0, 2000)}`);
-            }
-          }
-        }
+        clearTimeout(timer2to3);
+        clearTimeout(timer3to4);
 
-        if (screenRaw?.projectId) {
-          logger.debug(`Response projectId: ${screenRaw.projectId}`);
-        }
-
-        if (screenRaw?.sessionId) {
-          logger.debug(`Response sessionId: ${screenRaw.sessionId}`);
-        }
+        // S'assurer que les étapes 2, 3, 4 sont bien marquées complètes
+        emitProgress('stitch-2', 'complete', 'Concept visuel — couleurs, typographies & ambiance', cardTitle);
+        emitProgress(
+          'stitch-3',
+          'complete',
+          'Architecture des sections — hero, services, témoignages, contact',
+          cardTitle,
+        );
+        emitProgress('stitch-4', 'complete', 'Design généré par Gemini AI', cardTitle);
 
         const baseScreenId = extractScreenId(screenRaw);
         logger.info(`Base screen created: ${baseScreenId}`);
@@ -1559,234 +1513,154 @@ export function createStitchDesignTool(
           throw new Error(`Could not extract screenId from: ${JSON.stringify(screenRaw).slice(0, 300)}`);
         }
 
-        // Emit base screen immediately so the user sees something right away
-        {
-          let baseImageUrl = '';
-          let baseHtmlUrl = '';
+        // Extraire le design system réel renvoyé par Stitch (couleur, typo, concept)
+        function extractStitchDesignSystem(raw: any): Partial<DesignSystemResult> | null {
+          const sources: any[] = [];
 
-          if (screenRaw?.screenshot?.downloadUrl) {
-            baseImageUrl = screenRaw.screenshot.downloadUrl;
-          } else if (screenRaw?.screenshot?.imageUri) {
-            baseImageUrl = screenRaw.screenshot.imageUri;
-          } else if (screenRaw?.thumbnailScreenshot?.downloadUrl) {
-            baseImageUrl = screenRaw.thumbnailScreenshot.downloadUrl;
+          if (raw?.designSystem) {
+            sources.push(raw.designSystem);
           }
 
-          if (screenRaw?.htmlCode?.downloadUrl) {
-            baseHtmlUrl = screenRaw.htmlCode.downloadUrl;
-          } else if (screenRaw?.html?.htmlUri) {
-            baseHtmlUrl = screenRaw.html.htmlUri;
-          }
-
-          if (!baseImageUrl && screenRaw?.outputComponents) {
-            for (const comp of screenRaw.outputComponents) {
-              const s = comp?.design?.screens?.[0] || comp?.screens?.[0] || comp?.screen;
-
-              if (s?.screenshot?.downloadUrl) {
-                baseImageUrl = s.screenshot.downloadUrl;
-                break;
+          if (raw?.outputComponents) {
+            for (const comp of raw.outputComponents) {
+              if (comp?.designSystem) {
+                sources.push(comp.designSystem);
               }
 
-              if (s?.screenshot?.imageUri) {
-                baseImageUrl = s.screenshot.imageUri;
-                break;
-              }
+              const screens = comp?.design?.screens || comp?.screens || [];
 
-              if (s?.thumbnailScreenshot?.downloadUrl) {
-                baseImageUrl = s.thumbnailScreenshot.downloadUrl;
-                break;
+              for (const s of screens) {
+                if (s?.designSystem) {
+                  sources.push(s.designSystem);
+                }
               }
             }
           }
 
-          if (baseImageUrl || baseHtmlUrl) {
-            lastEmittedBaseDesigns = [
-              {
-                option: 1,
-                title: 'Design principal',
-                imageUrl: baseImageUrl,
-                htmlUrl: baseHtmlUrl,
-                screenId: baseScreenId,
-              },
-            ];
-            emitDesignCards(lastEmittedBaseDesigns, projectId, designSystem, true, 2);
-            didEmitLoadingCards = true;
-            emitProgress('stitch', 'in-progress', 'Premier design prêt ! Génération des variantes...');
-          }
-        }
+          for (const src of sources) {
+            const ds = src?.designSystem || src;
+            const theme = ds?.theme || ds;
 
-        try {
-          logger.info('Creating native Stitch design system...');
+            if (theme?.customColor || theme?.bodyFont || ds?.displayName) {
+              const primaryColor = theme.customColor || '#000000';
+              const font = (theme.bodyFont || 'Inter').charAt(0) + (theme.bodyFont || 'Inter').slice(1).toLowerCase();
+              const name = ds.displayName || `${business_name || niche} Design`;
 
-          const dsRaw = await callStitchMCP(stitchKey, 'create_design_system', {
-            projectId,
-            prompt: `Create a cohesive design system for a premium ${niche} business in France called "${business_name || niche}". The design system should enforce consistent typography, color palette, spacing, and component styles across all pages. Style: ${typography_style || 'modern'}.`,
-          });
+              // Extraire le résumé du designMd (premier paragraphe après le titre)
+              let concept = '';
 
-          const dsId =
-            dsRaw?.designSystem?.name?.match(/designSystems\/([^/]+)/)?.[1] ||
-            dsRaw?.name?.match(/designSystems\/([^/]+)/)?.[1] ||
-            dsRaw?.designSystemId;
+              if (theme.designMd) {
+                const lines = theme.designMd.split('\n').filter((l: string) => l.trim() && !l.startsWith('#'));
+                concept = lines[0]?.replace(/\*\*/g, '').trim().slice(0, 200) || '';
+              }
 
-          if (dsId) {
-            logger.info(`Design system created: ${dsId}`);
+              logger.info(`Stitch design system extracted: "${name}", color=${primaryColor}, font=${font}`);
 
-            await callStitchMCP(stitchKey, 'apply_design_system', {
-              projectId,
-              designSystemId: dsId,
-              screenIds: [baseScreenId],
-            });
-            logger.info('Design system applied to base screen');
-          } else {
-            logger.debug(`Design system response: ${JSON.stringify(dsRaw).slice(0, 500)}`);
-          }
-        } catch (dsErr) {
-          logger.warn(`Design system creation skipped: ${dsErr instanceof Error ? dsErr.message : dsErr}`);
-        }
-
-        emitProgress('stitch', 'in-progress', 'Création des 2 variantes de design...');
-
-        logger.info('Generating 2 design variants (REIMAGINE)...');
-
-        const variantArgs = {
-          projectId,
-          selectedScreenIds: [baseScreenId],
-          prompt: briefWithRefs,
-          variantOptions: {
-            variantCount: 2,
-            creativeRange: 'REIMAGINE',
-            aspects: ['COLOR_SCHEME', 'LAYOUT', 'TEXT_FONT', 'IMAGES', 'TEXT_CONTENT'],
-          },
-          deviceType: 'DESKTOP',
-          modelId: 'GEMINI_3_1_PRO',
-        };
-        logger.debug(`generate_variants args: ${JSON.stringify(variantArgs).slice(0, 1000)}`);
-
-        const variantsRaw = await withHeartbeat(callStitchMCP(stitchKey, 'generate_variants', variantArgs));
-        logger.debug(`Variants raw (full): ${JSON.stringify(variantsRaw).slice(0, 3000)}`);
-        logger.debug(`Variants raw keys: ${JSON.stringify(Object.keys(variantsRaw || {}))}`);
-
-        if (variantsRaw?.outputComponents) {
-          logger.debug(`Variants outputComponents count: ${variantsRaw.outputComponents.length}`);
-
-          for (let ci = 0; ci < variantsRaw.outputComponents.length; ci++) {
-            const comp = variantsRaw.outputComponents[ci];
-            logger.debug(`Variants outputComponents[${ci}] keys: ${JSON.stringify(Object.keys(comp || {}))}`);
-
-            if (comp?.name) {
-              logger.debug(`Variants outputComponents[${ci}].name: ${comp.name}`);
+              return {
+                name,
+                palette: [
+                  { label: 'Primary', hex: primaryColor },
+                  { label: 'Mode', hex: theme.colorMode === 'DARK' ? '#0A0A0A' : '#FFFFFF' },
+                ],
+                typography: { style: font.toLowerCase(), fonts: [font, 'system-ui', 'sans-serif'] },
+                features: concept ? [concept.slice(0, 80)] : [],
+              };
             }
           }
+
+          return null;
         }
 
-        const designs: DesignResult[] = [];
+        const stitchDS = extractStitchDesignSystem(screenRaw);
+        const finalDesignSystem = stitchDS
+          ? { ...designSystem, ...stitchDS, palette: stitchDS.palette || designSystem.palette }
+          : designSystem;
 
-        const variantScreens: any[] = [];
+        // ── Étape 5 : Compilation finale ────────────────────────────────
+        emitProgress('stitch-5', 'in-progress', "Compilation HTML & génération de l'aperçu final…", cardTitle);
 
-        if (variantsRaw?.outputComponents) {
-          for (const comp of variantsRaw.outputComponents) {
-            if (comp?.design?.screens && Array.isArray(comp.design.screens)) {
-              variantScreens.push(...comp.design.screens);
+        // Extraire screenshot + HTML — vérifier top-level ET outputComponents ET screens
+        function extractUrls(raw: any): { imageUrl: string; htmlUrl: string } {
+          let imageUrl = '';
+          let htmlUrl = '';
+
+          if (raw?.screenshot?.downloadUrl) {
+            imageUrl = raw.screenshot.downloadUrl;
+          } else if (raw?.screenshot?.imageUri) {
+            imageUrl = raw.screenshot.imageUri;
+          } else if (raw?.thumbnailScreenshot?.downloadUrl) {
+            imageUrl = raw.thumbnailScreenshot.downloadUrl;
+          }
+
+          if (raw?.htmlCode?.downloadUrl) {
+            htmlUrl = raw.htmlCode.downloadUrl;
+          } else if (raw?.html?.htmlUri) {
+            htmlUrl = raw.html.htmlUri;
+          }
+
+          if ((!imageUrl || !htmlUrl) && raw?.outputComponents) {
+            for (const comp of raw.outputComponents) {
+              const screens = comp?.design?.screens || comp?.screens || (comp?.screen ? [comp.screen] : []);
+
+              for (const s of screens) {
+                if (!imageUrl) {
+                  if (s?.screenshot?.downloadUrl) {
+                    imageUrl = s.screenshot.downloadUrl;
+                  } else if (s?.screenshot?.imageUri) {
+                    imageUrl = s.screenshot.imageUri;
+                  } else if (s?.thumbnailScreenshot?.downloadUrl) {
+                    imageUrl = s.thumbnailScreenshot.downloadUrl;
+                  }
+                }
+
+                if (!htmlUrl) {
+                  if (s?.htmlCode?.downloadUrl) {
+                    htmlUrl = s.htmlCode.downloadUrl;
+                  } else if (s?.html?.htmlUri) {
+                    htmlUrl = s.html.htmlUri;
+                  }
+                }
+
+                if (imageUrl && htmlUrl) {
+                  break;
+                }
+              }
+
+              if (imageUrl && htmlUrl) {
+                break;
+              }
             }
           }
+
+          return { imageUrl, htmlUrl };
         }
 
-        if (variantScreens.length === 0 && Array.isArray(variantsRaw?.screens)) {
-          variantScreens.push(...variantsRaw.screens);
+        const { imageUrl: baseImageUrl, htmlUrl: baseHtmlUrl } = extractUrls(screenRaw);
+        logger.info(`Base screen URLs: screenshot=${baseImageUrl ? 'yes' : 'no'}, html=${baseHtmlUrl ? 'yes' : 'no'}`);
+
+        if (baseImageUrl || baseHtmlUrl) {
+          const designTitle = stitchDS?.name || 'Design principal';
+          lastEmittedBaseDesigns = [
+            { option: 1, title: designTitle, imageUrl: baseImageUrl, htmlUrl: baseHtmlUrl, screenId: baseScreenId },
+          ];
+          emitDesignCards(lastEmittedBaseDesigns, projectId, finalDesignSystem, false);
+          didEmitLoadingCards = true;
+          emitProgress('stitch-5', 'complete', `Votre design "${designTitle}" est prêt !`, cardTitle);
         }
 
-        logger.info(`Found ${variantScreens.length} variant screen(s) in response`);
-
-        if (variantScreens.length > 0) {
-          for (let i = 0; i < variantScreens.length; i++) {
-            const screen = variantScreens[i];
-            const sid = screen?.id || extractScreenId(screen);
-
-            let imageUrl = '';
-            let htmlUrl = '';
-
-            if (screen?.screenshot?.downloadUrl) {
-              imageUrl = screen.screenshot.downloadUrl;
-            } else if (screen?.screenshot?.imageUri) {
-              imageUrl = screen.screenshot.imageUri;
-            } else if (screen?.thumbnailScreenshot?.downloadUrl) {
-              imageUrl = screen.thumbnailScreenshot.downloadUrl;
-            }
-
-            if (screen?.htmlCode?.downloadUrl) {
-              htmlUrl = screen.htmlCode.downloadUrl;
-            } else if (screen?.html?.htmlUri) {
-              htmlUrl = screen.html.htmlUri;
-            }
-
-            if (imageUrl || htmlUrl) {
-              designs.push({
-                option: i + 1,
-                title: screen?.title || `Design ${i + 1}`,
-                imageUrl,
-                htmlUrl,
-                screenId: sid || `variant-${i}`,
-              });
-              logger.info(`Design ${i + 1}: screenshot=${imageUrl ? 'yes' : 'no'}, html=${htmlUrl ? 'yes' : 'no'}`);
-            } else {
-              logger.warn(`Variant screen ${i} has no URLs. Keys: ${JSON.stringify(Object.keys(screen || {}))}`);
-            }
-          }
-        }
+        const designs: DesignResult[] = lastEmittedBaseDesigns;
 
         if (designs.length === 0) {
-          logger.warn('No designs from variants, trying get_screen on base screen...');
-
-          try {
-            const screenData = await callStitchMCP(stitchKey, 'get_screen', {
-              projectId,
-              screenId: baseScreenId,
-              name: `projects/${projectId}/screens/${baseScreenId}`,
-            });
-
-            let imageUrl = '';
-            let htmlUrl = '';
-
-            if (screenData?.screenshot?.downloadUrl) {
-              imageUrl = screenData.screenshot.downloadUrl;
-            } else if (screenData?.screenshot?.imageUri) {
-              imageUrl = screenData.screenshot.imageUri;
-            }
-
-            if (screenData?.htmlCode?.downloadUrl) {
-              htmlUrl = screenData.htmlCode.downloadUrl;
-            } else if (screenData?.html?.htmlUri) {
-              htmlUrl = screenData.html.htmlUri;
-            }
-
-            if (imageUrl || htmlUrl) {
-              designs.push({
-                option: 1,
-                title: 'Design 1',
-                imageUrl,
-                htmlUrl,
-                screenId: baseScreenId,
-              });
-            }
-          } catch (err) {
-            logger.warn(`Failed to get base screen: ${err}`);
-          }
-        }
-
-        if (designs.length === 0) {
-          if (didEmitLoadingCards) {
-            emitDesignCards(lastEmittedBaseDesigns, undefined, designSystem, false);
-          }
-
           return {
             success: false,
-            designSystem,
-            message: 'Stitch generated designs but failed to retrieve screenshots/HTML.',
+            designSystem: finalDesignSystem,
+            message: 'Stitch generated a design but failed to retrieve screenshot/HTML.',
           };
         }
 
-        emitDesignCards(designs, projectId, designSystem, false);
-        emitProgress('stitch', 'complete', `${designs.length} designs générés avec succès`);
+        logger.info(
+          `Design ready: screenshot=${designs[0].imageUrl ? 'yes' : 'no'}, html=${designs[0].htmlUrl ? 'yes' : 'no'}`,
+        );
 
         return {
           success: true,
@@ -1795,12 +1669,12 @@ export function createStitchDesignTool(
           projectId,
           designCount: designs.length,
           designs,
-          designSystem,
-          usedImageReference: usedImageRef,
-          referenceWebsites: screenshots.map((s) => s.sourceUrl),
+          designSystem: finalDesignSystem,
+          usedImageReference: false,
+          referenceWebsites: [],
           instructions:
-            "IMPORTANT : Les design cards seront affichées automatiquement via l'annotation du chat UI. " +
-            "Dans ta réponse texte, présente brièvement les options et demande à l'utilisateur de cliquer sur le design qu'il préfère. " +
+            "IMPORTANT : La design card sera affichée automatiquement via l'annotation du chat UI. " +
+            "Dans ta réponse texte, présente brièvement le design et demande à l'utilisateur de cliquer dessus pour le sélectionner. " +
             "Quand l'utilisateur sélectionne un design, le code HTML source COMPLET sera injecté directement dans son message. " +
             'Tu dois OBLIGATOIREMENT reproduire ce HTML PIXEL-PERFECT en projet React + Vite + TypeScript (TSX) + Tailwind CSS. ' +
             'Garde EXACTEMENT le même layout, les mêmes sections, couleurs, polices, espacements et images. ' +

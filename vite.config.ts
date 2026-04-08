@@ -90,17 +90,19 @@ function chrome129IssuePlugin() {
     name: 'chrome129IssuePlugin',
     configureServer(server: ViteDevServer) {
       server.middlewares.use((req, res, next) => {
-        // Allow /embed to be loaded in a cross-origin iframe
-        if (req.url === '/embed' || req.url?.startsWith('/embed?')) {
-          const origWriteHead = res.writeHead.bind(res) as typeof res.writeHead;
+        /*
+         * Apply COEP/COOP headers globally so WebContainer's SharedArrayBuffer works
+         * in every asset loaded by the /embed iframe (JS chunks, vendor.js, etc.)
+         */
+        const origWriteHead = res.writeHead.bind(res) as typeof res.writeHead;
 
-          (res as any).writeHead = function (statusCode: number, ...args: any[]) {
-            res.setHeader('Cross-Origin-Opener-Policy', 'same-origin-allow-popups');
-            res.setHeader('Cross-Origin-Resource-Policy', 'cross-origin');
+        (res as any).writeHead = function (statusCode: number, ...args: any[]) {
+          res.setHeader('Cross-Origin-Opener-Policy', 'same-origin');
+          res.setHeader('Cross-Origin-Embedder-Policy', 'credentialless');
+          res.setHeader('Cross-Origin-Resource-Policy', 'cross-origin');
 
-            return origWriteHead(statusCode, ...args);
-          };
-        }
+          return origWriteHead(statusCode, ...args);
+        };
 
         const raw = req.headers['user-agent']?.match(/Chrom(e|ium)\/([0-9]+)\./);
 

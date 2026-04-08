@@ -20,7 +20,7 @@ import type { ActionAlert, SupabaseAlert, DeployAlert, LlmErrorAlertType } from 
 import DeployChatAlert from '~/components/deploy/DeployAlert';
 import ChatAlert from './ChatAlert';
 import type { ModelInfo } from '~/lib/modules/llm/types';
-import ProgressCompilation from './ProgressCompilation';
+
 import type { ProgressAnnotation } from '~/types/context';
 import { SupabaseChatAlert } from '~/components/chat/SupabaseAlert';
 import { expoUrlAtom } from '~/lib/stores/qrCodeStore';
@@ -456,6 +456,7 @@ export const BaseChat = React.forwardRef<HTMLDivElement, BaseChatProps>(
                         provider={provider}
                         model={model}
                         addToolResult={addToolResult}
+                        progressAnnotations={progressAnnotations}
                       />
                     ) : null;
                   }}
@@ -500,7 +501,6 @@ export const BaseChat = React.forwardRef<HTMLDivElement, BaseChatProps>(
                   )}
                   {llmErrorAlert && <LlmErrorAlert alert={llmErrorAlert} clearAlert={() => clearLlmErrorAlert?.()} />}
                 </div>
-                {progressAnnotations && <ProgressCompilation data={progressAnnotations} />}
                 {brandAssetsOpen && <BrandAssetsPanel onClose={() => setBrandAssetsOpen(false)} />}
                 <ChatBox
                   isModelSettingsCollapsed={isModelSettingsCollapsed}

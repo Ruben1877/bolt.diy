@@ -10,6 +10,7 @@ import { toast } from 'react-toastify';
 import { forwardRef } from 'react';
 import type { ForwardedRef } from 'react';
 import type { ProviderInfo } from '~/types/model';
+import type { ProgressAnnotation } from '~/types/context';
 
 interface MessagesProps {
   id?: string;
@@ -22,11 +23,18 @@ interface MessagesProps {
   model?: string;
   provider?: ProviderInfo;
   addToolResult: ({ toolCallId, result }: { toolCallId: string; result: any }) => void;
+  progressAnnotations?: ProgressAnnotation[];
 }
 
 export const Messages = forwardRef<HTMLDivElement, MessagesProps>(
   (props: MessagesProps, ref: ForwardedRef<HTMLDivElement> | undefined) => {
-    const { id, isStreaming = false, messages = [] } = props;
+    const { id, isStreaming = false, messages = [], progressAnnotations } = props;
+
+    // Index du dernier message assistant (celui en cours de streaming)
+    const lastAssistantIndex = messages.reduceRight(
+      (found, m, i) => (found === -1 && m.role === 'assistant' ? i : found),
+      -1,
+    );
     const location = useLocation();
 
     const handleRewind = (messageId: string) => {
@@ -86,6 +94,9 @@ export const Messages = forwardRef<HTMLDivElement, MessagesProps>(
                         provider={props.provider}
                         parts={parts}
                         addToolResult={props.addToolResult}
+                        progressAnnotations={
+                          isStreaming && index === lastAssistantIndex ? progressAnnotations : undefined
+                        }
                       />
                     )}
                   </div>

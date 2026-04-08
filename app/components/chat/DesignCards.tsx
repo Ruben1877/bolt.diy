@@ -4,6 +4,8 @@ import type { Message } from 'ai';
 import { brandAssetsStore } from '~/lib/stores/brandAssets';
 import { replaceImagesWithBrandAssets, hasBrandAssets } from '~/lib/utils/imageReplacer';
 
+const isInIframe = typeof window !== 'undefined' && window.parent !== window;
+
 interface Design {
   option: number;
   title: string;
@@ -77,6 +79,8 @@ export const DesignCards = memo(
     const [liveHtml, setLiveHtml] = useState<Record<number, string>>({});
     const [htmlLoading, setHtmlLoading] = useState<Record<number, boolean>>({});
     const fetchedUrlsRef = useRef<Set<string>>(new Set());
+    const pendingAppendRef = useRef<Message | null>(null);
+    const [waitingAuth, setWaitingAuth] = useState(false);
 
     const brandAssets = useStore(brandAssetsStore);
     const hasAssets = hasBrandAssets(brandAssets);
@@ -127,25 +131,37 @@ export const DesignCards = memo(
       [total, selectedOption],
     );
 
-    const handleSelect = useCallback(
-      async (design: Design) => {
-        if (selectedOption || fetching) {
-          return;
+    // Écoute le feu vert OU l'annulation de Limova
+    useEffect(() => {
+      const handler = (e: MessageEvent) => {
+        if (e.data?.type === 'bolt:proceed-build' && pendingAppendRef.current) {
+          append?.(pendingAppendRef.current);
+          pendingAppendRef.current = null;
+          setWaitingAuth(false);
         }
 
-        setFetching(true);
-        setSelectedOption(design.option);
+        if (e.data?.type === 'bolt:cancel-build') {
+          pendingAppendRef.current = null;
+          setWaitingAuth(false);
+          setSelectedOption(null);
+          setFetching(false);
+        }
+      };
 
+      window.addEventListener('message', handler);
+
+      return () => window.removeEventListener('message', handler);
+    }, [append]);
+
+    const buildMessage = useCallback(
+      async (design: Design): Promise<Message> => {
         let htmlContent = liveHtml[design.option] || '';
 
         if (!htmlContent) {
           htmlContent = (await fetchAndReplaceHtml(design.htmlUrl, brandAssets)) || '';
         }
 
-        setFetching(false);
-
         const hasClientPhotos = hasBrandAssets(brandAssets);
-
         const instructions = [`Je choisis le design ${design.option} (${design.title}).`, ''];
 
         if (htmlContent) {
@@ -179,18 +195,37 @@ export const DesignCards = memo(
           );
         }
 
-        append?.({
-          id: crypto.randomUUID(),
-          role: 'user',
-          content: instructions.join('\n'),
-        });
+        return { id: crypto.randomUUID(), role: 'user', content: instructions.join('\n') };
+      },
+      [liveHtml, brandAssets],
+    );
 
-        // Notifie le parent (Limova) que l'utilisateur a choisi un design
-        if (window.parent && window.parent !== window) {
+    const handleSelect = useCallback(
+      async (design: Design) => {
+        if (selectedOption || fetching || waitingAuth) {
+          return;
+        }
+
+        setFetching(true);
+
+        const message = await buildMessage(design);
+
+        setFetching(false);
+        setSelectedOption(design.option);
+
+        if (isInIframe) {
+          // Mode iframe (Limova) — on envoie le design sélectionné et on attend l'auth
+          pendingAppendRef.current = message;
+          setWaitingAuth(true);
           window.parent.postMessage({ type: 'bolt:design-selected', option: design.option, title: design.title }, '*');
+
+          // Pas de fallback : le build ne démarre QUE sur bolt:proceed-build
+        } else {
+          // Mode standalone — pas d'auth requise, on build directement
+          append?.(message);
         }
       },
-      [append, selectedOption, fetching, liveHtml, brandAssets],
+      [append, selectedOption, fetching, waitingAuth, buildMessage],
     );
 
     const handleRefine = useCallback(async () => {
@@ -340,7 +375,7 @@ export const DesignCards = memo(
                 </span>
               </div>
 
-              {!selectedOption && !fetching ? (
+              {!selectedOption && !fetching && !waitingAuth ? (
                 <button
                   onClick={() => handleSelect(current)}
                   className="ml-2 px-3 py-1.5 rounded-lg text-xs font-medium bg-bolt-elements-background-depth-2 border border-bolt-elements-borderColor text-bolt-elements-textPrimary hover:bg-bolt-elements-background-depth-3 transition-colors flex-shrink-0"
@@ -351,6 +386,11 @@ export const DesignCards = memo(
                 <span className="flex items-center gap-1.5 text-xs text-bolt-elements-textTertiary flex-shrink-0">
                   <div className="i-svg-spinners:90-ring-with-bg text-sm" />
                   Récupération du HTML…
+                </span>
+              ) : waitingAuth ? (
+                <span className="flex items-center gap-1.5 text-xs text-amber-500 flex-shrink-0">
+                  <div className="i-svg-spinners:90-ring-with-bg text-sm" />
+                  En attente de connexion…
                 </span>
               ) : isSelected ? (
                 <span className="flex items-center gap-1.5 text-xs text-green-500 flex-shrink-0">

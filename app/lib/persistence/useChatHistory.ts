@@ -20,6 +20,7 @@ import {
 import type { FileMap } from '~/lib/stores/files';
 import type { Snapshot } from './types';
 import { webcontainer } from '~/lib/webcontainer';
+import { syncMessagesToServer, syncSnapshotToServer, fetchChatFromServer } from './serverSync';
 import { detectProjectCommands, createCommandActionsString } from '~/utils/projectCommands';
 import type { ContextAnnotation } from '~/types/context';
 
@@ -68,6 +69,54 @@ export function useChatHistory() {
         getSnapshot(db, mixedId), // Fetch snapshot from DB
       ])
         .then(async ([storedMessages, snapshot]) => {
+          // Si la conversation est absente de l'IndexedDB, tenter de la restaurer depuis le serveur
+          if ((!storedMessages || storedMessages.messages.length === 0) && mixedId) {
+            const serverChat = await fetchChatFromServer(mixedId);
+
+            if (serverChat && serverChat.messages.length > 0) {
+              // Importer dans l'IndexedDB local pour les prochaines visites
+              await setMessages(
+                db,
+                mixedId,
+                serverChat.messages as Message[],
+                undefined,
+                serverChat.description ?? undefined,
+              );
+
+              if (serverChat.snapshot) {
+                await setSnapshot(db, mixedId, serverChat.snapshot);
+              }
+
+              setInitialMessages(serverChat.messages as Message[]);
+              description.set(serverChat.description ?? undefined);
+              chatId.set(mixedId);
+
+              // Notifier Limova que la conversation a été restaurée depuis le serveur
+              const limovaOrigin = (import.meta.env.VITE_LIMOVA_URL as string) || 'http://localhost:3000';
+
+              if (window.parent && window.parent !== window) {
+                window.parent.postMessage(
+                  { type: 'bolt:conversation-loaded', chatId: mixedId, source: 'server' },
+                  limovaOrigin,
+                );
+              }
+
+              if (serverChat.snapshot) {
+                restoreSnapshot(mixedId, serverChat.snapshot);
+              }
+
+              setReady(true);
+
+              return;
+            }
+
+            // Pas trouvé non plus côté serveur → nouvelle conv
+            navigate('/', { replace: true });
+            setReady(true);
+
+            return;
+          }
+
           if (storedMessages && storedMessages.messages.length > 0) {
             /*
              * const snapshotStr = localStorage.getItem(`snapshot:${mixedId}`); // Remove localStorage usage
@@ -179,6 +228,13 @@ ${value.content}
             description.set(storedMessages.description);
             chatId.set(storedMessages.id);
             chatMetadata.set(storedMessages.metadata);
+
+            // Notify parent window (Limova) that an existing conversation was loaded
+            const limovaOrigin = (import.meta.env.VITE_LIMOVA_URL as string) || 'http://localhost:3000';
+
+            if (window.parent && window.parent !== window) {
+              window.parent.postMessage({ type: 'bolt:conversation-loaded', chatId: storedMessages.id }, limovaOrigin);
+            }
           } else {
             navigate('/', { replace: true });
           }
@@ -187,9 +243,8 @@ ${value.content}
         })
         .catch((error) => {
           console.error(error);
-
-          logStore.logError('Failed to load chat messages or snapshot', error); // Updated error message
-          toast.error('Failed to load chat: ' + error.message); // More specific error
+          logStore.logError('Failed to load chat messages or snapshot', error);
+          toast.error('Failed to load chat: ' + error.message);
         });
     } else {
       // Handle case where there is no mixedId (e.g., new chat)
@@ -214,6 +269,9 @@ ${value.content}
       // localStorage.setItem(`snapshot:${id}`, JSON.stringify(snapshot)); // Remove localStorage usage
       try {
         await setSnapshot(db, id, snapshot);
+
+        // Sync snapshot serveur (non-bloquant)
+        syncSnapshotToServer(id, snapshot).catch(() => {});
       } catch (error) {
         console.error('Failed to save snapshot:', error);
         toast.error('Failed to save chat snapshot.');
@@ -320,6 +378,13 @@ ${value.content}
         if (!urlId) {
           navigateChat(nextId);
         }
+
+        // Notify parent window (Limova) that a new conversation was created
+        const limovaOrigin = (import.meta.env.VITE_LIMOVA_URL as string) || 'http://localhost:3000';
+
+        if (window.parent && window.parent !== window) {
+          window.parent.postMessage({ type: 'bolt:conversation-started', chatId: nextId }, limovaOrigin);
+        }
       }
 
       // Ensure chatId.get() is used for the final setMessages call
@@ -341,6 +406,9 @@ ${value.content}
         undefined,
         chatMetadata.get(),
       );
+
+      // Sync serveur (non-bloquant)
+      syncMessagesToServer(finalChatId, [...archivedMessages, ...messages], description.get()).catch(() => {});
     },
     duplicateCurrentChat: async (listItemId: string) => {
       if (!db || (!mixedId && !listItemId)) {
