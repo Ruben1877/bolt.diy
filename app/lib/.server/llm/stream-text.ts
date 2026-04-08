@@ -71,6 +71,8 @@ export async function streamText(props: {
   messageSliceId?: number;
   chatMode?: 'discuss' | 'build';
   designScheme?: DesignScheme;
+  projectKnowledge?: string; // Contexte spécifique au projet (style Lovable Project Knowledge)
+  workspaceKnowledge?: string; // Standards partagés entre tous les projets (style Lovable Workspace Knowledge)
 }) {
   const {
     messages,
@@ -85,6 +87,8 @@ export async function streamText(props: {
     summary,
     chatMode,
     designScheme,
+    projectKnowledge,
+    workspaceKnowledge,
   } = props;
   let currentModel = DEFAULT_MODEL;
   let currentProvider = DEFAULT_PROVIDER.name;
@@ -167,6 +171,32 @@ export async function streamText(props: {
         credentials: options?.supabaseConnection?.credentials || undefined,
       },
     }) ?? getSystemPrompt();
+
+  /*
+   * ── Injection Knowledge (style Lovable) ──────────────────────────────────
+   * Injecté à chaque message, indépendamment du mode ou de l'optimisation de contexte.
+   * Workspace Knowledge : priorité basse (standards globaux)
+   */
+  if (workspaceKnowledge?.trim()) {
+    systemPrompt = `${systemPrompt}
+
+<workspace_knowledge>
+The following rules and standards apply to ALL projects in this workspace. Follow them unless overridden by project knowledge.
+${workspaceKnowledge.trim()}
+</workspace_knowledge>`;
+  }
+
+  // Project Knowledge : priorité haute (contexte spécifique au projet)
+  if (projectKnowledge?.trim()) {
+    systemPrompt = `${systemPrompt}
+
+<project_knowledge>
+IMPORTANT: The following instructions are specific to this project and take priority over workspace knowledge when they conflict.
+${projectKnowledge.trim()}
+</project_knowledge>`;
+  }
+
+  // ─────────────────────────────────────────────────────────────────────────
 
   if (chatMode === 'build' && contextFiles && contextOptimization) {
     const codeContext = createFilesContext(contextFiles, true);

@@ -49,24 +49,36 @@ async function chatAction({ context, request }: ActionFunctionArgs) {
     },
   });
 
-  const { messages, files, promptId, contextOptimization, supabase, chatMode, designScheme, maxLLMSteps } =
-    await request.json<{
-      messages: Messages;
-      files: any;
-      promptId?: string;
-      contextOptimization: boolean;
-      chatMode: 'discuss' | 'build';
-      designScheme?: DesignScheme;
-      supabase?: {
-        isConnected: boolean;
-        hasSelectedProject: boolean;
-        credentials?: {
-          anonKey?: string;
-          supabaseUrl?: string;
-        };
+  const {
+    messages,
+    files,
+    promptId,
+    contextOptimization,
+    supabase,
+    chatMode,
+    designScheme,
+    maxLLMSteps,
+    projectKnowledge,
+    workspaceKnowledge,
+  } = await request.json<{
+    messages: Messages;
+    files: any;
+    promptId?: string;
+    contextOptimization: boolean;
+    chatMode: 'discuss' | 'build';
+    designScheme?: DesignScheme;
+    supabase?: {
+      isConnected: boolean;
+      hasSelectedProject: boolean;
+      credentials?: {
+        anonKey?: string;
+        supabaseUrl?: string;
       };
-      maxLLMSteps: number;
-    }>();
+    };
+    maxLLMSteps: number;
+    projectKnowledge?: string; // Contexte spécifique au projet (style Lovable)
+    workspaceKnowledge?: string; // Standards partagés entre tous les projets
+  }>();
 
   const cookieHeader = request.headers.get('Cookie');
   const apiKeys = JSON.parse(parseCookies(cookieHeader || '').apiKeys || '{}');
@@ -324,6 +336,8 @@ async function chatAction({ context, request }: ActionFunctionArgs) {
               designScheme,
               summary,
               messageSliceId,
+              projectKnowledge,
+              workspaceKnowledge,
             });
 
             result.mergeIntoDataStream(dataStream);
@@ -365,6 +379,8 @@ async function chatAction({ context, request }: ActionFunctionArgs) {
           designScheme,
           summary,
           messageSliceId,
+          projectKnowledge,
+          workspaceKnowledge,
         });
 
         (async () => {

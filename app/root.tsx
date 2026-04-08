@@ -51,10 +51,12 @@ const inlineThemeCode = stripIndents`
   setTutorialKitTheme();
 
   function setTutorialKitTheme() {
+    // Intégré dans Limova : toujours thème clair pour cohérence visuelle avec le dashboard.
+    // L'utilisateur peut forcer le mode sombre via les settings (axtraai_theme/bolt_theme=dark).
     let theme = localStorage.getItem('axtraai_theme') || localStorage.getItem('bolt_theme');
 
-    if (!theme) {
-      theme = window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
+    if (!theme || theme === 'system') {
+      theme = 'light';
     }
 
     document.querySelector('html')?.setAttribute('data-theme', theme);

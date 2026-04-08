@@ -110,8 +110,8 @@ export function useChatHistory() {
               return;
             }
 
-            // Pas trouvé non plus côté serveur → nouvelle conv
-            navigate('/', { replace: true });
+            // Pas trouvé non plus côté serveur → ouvrir un nouveau chat vide (rester en mode embed)
+            navigate('/embed', { replace: true });
             setReady(true);
 
             return;
@@ -236,7 +236,8 @@ ${value.content}
               window.parent.postMessage({ type: 'bolt:conversation-loaded', chatId: storedMessages.id }, limovaOrigin);
             }
           } else {
-            navigate('/', { replace: true });
+            // Chat vide ou introuvable — rester en mode embed plutôt que d'aller sur /
+            navigate('/embed', { replace: true });
           }
 
           setReady(true);
@@ -270,8 +271,8 @@ ${value.content}
       try {
         await setSnapshot(db, id, snapshot);
 
-        // Sync snapshot serveur (non-bloquant)
-        syncSnapshotToServer(id, snapshot).catch(() => {});
+        // Sync snapshot serveur (non-bloquant, debounced)
+        syncSnapshotToServer(id, snapshot);
       } catch (error) {
         console.error('Failed to save snapshot:', error);
         toast.error('Failed to save chat snapshot.');
@@ -407,8 +408,8 @@ ${value.content}
         chatMetadata.get(),
       );
 
-      // Sync serveur (non-bloquant)
-      syncMessagesToServer(finalChatId, [...archivedMessages, ...messages], description.get()).catch(() => {});
+      // Sync serveur (non-bloquant, debounced)
+      syncMessagesToServer(finalChatId, [...archivedMessages, ...messages], description.get());
     },
     duplicateCurrentChat: async (listItemId: string) => {
       if (!db || (!mixedId && !listItemId)) {
@@ -471,9 +472,21 @@ function navigateChat(nextId: string) {
    * FIXME: Using the intended navigate function causes a rerender for <Chat /> that breaks the app.
    *
    * `navigate(`/chat/${nextId}`, { replace: true });`
+   *
+   * En mode embed (/embed), on ne change PAS le pathname vers /chat/xxx car Remix
+   * détecterait le changement, re-rendrait chat.$id.tsx et réexécuterait useChatHistory —
+   * provoquant des conflits d'unicité urlId dans IndexedDB.
+   * On met à jour uniquement le paramètre chatId pour conserver le contexte.
    */
   const url = new URL(window.location.href);
-  url.pathname = `/chat/${nextId}`;
 
+  if (url.pathname.startsWith('/embed')) {
+    url.searchParams.set('chatId', nextId);
+    window.history.replaceState({}, '', url);
+
+    return;
+  }
+
+  url.pathname = `/chat/${nextId}`;
   window.history.replaceState({}, '', url);
 }

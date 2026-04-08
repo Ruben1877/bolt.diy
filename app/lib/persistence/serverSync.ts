@@ -11,8 +11,14 @@ import type { Snapshot } from './types';
 
 const logger = createScopedLogger('serverSync');
 
-const LIMOVA_API = ((import.meta.env.VITE_LIMOVA_URL as string) || 'http://localhost:3000').replace(/\/$/, '');
-const BACKEND_URL = `${LIMOVA_API.replace(':3000', ':3001')}`;
+/*
+ * En prod, VITE_LIMOVA_API_URL doit pointer directement vers l'API (ex: https://api.example.com).
+ * En dev, on dérive l'URL en remplaçant le port :3000 → :3001 depuis VITE_LIMOVA_URL.
+ */
+const BACKEND_URL = (
+  (import.meta.env.VITE_LIMOVA_API_URL as string) ||
+  ((import.meta.env.VITE_LIMOVA_URL as string) || 'http://localhost:3000').replace(':3000', ':3001')
+).replace(/\/$/, '');
 
 // Token reçu depuis Limova via postMessage — stocké en mémoire (jamais dans localStorage)
 let _authToken: string | null = null;
@@ -33,34 +39,58 @@ function getHeaders(): HeadersInit | null {
   };
 }
 
-/**
- * Sync les messages d'une conversation vers le serveur.
- * Appelé après chaque sauvegarde dans IndexedDB.
- * Ne bloque pas — erreurs silencieuses en prod.
+/*
+ * ── Debounce helpers ─────────────────────────────────────────────────────────
+ * Pendant un build, bolt.diy peut écrire des dizaines de fichiers en quelques
+ * secondes et appeler sync à chaque fois. Sans debounce, cela génère des
+ * centaines de requêtes qui saturent le rate-limiter (429).
+ * On regroupe les appels rapides en une seule requête envoyée 4 s après le
+ * dernier appel.
  */
-export async function syncMessagesToServer(chatId: string, messages: Message[], description?: string): Promise<void> {
+
+const DEBOUNCE_MS = 4000;
+
+const _msgTimers = new Map<string, ReturnType<typeof setTimeout>>();
+const _msgPending = new Map<string, { messages: Message[]; description?: string }>();
+
+const _snapTimers = new Map<string, ReturnType<typeof setTimeout>>();
+const _snapPending = new Map<string, Snapshot>();
+
+async function _flushMessages(chatId: string): Promise<void> {
+  const pending = _msgPending.get(chatId);
+  _msgPending.delete(chatId);
+  _msgTimers.delete(chatId);
+
+  if (!pending) {
+    return;
+  }
+
   const headers = getHeaders();
 
   if (!headers) {
     return;
-  } // Pas de token = invité, on ne sync pas
+  }
 
   try {
     await fetch(`${BACKEND_URL}/bolt-chat/${encodeURIComponent(chatId)}`, {
       method: 'PUT',
       headers,
-      body: JSON.stringify({ messages, description }),
+      body: JSON.stringify(pending),
     });
   } catch (err) {
     logger.warn('syncMessagesToServer failed (non-blocking):', err);
   }
 }
 
-/**
- * Sync le snapshot (fichiers WebContainer) vers le serveur.
- * Appelé après chaque snapshot — séparé car peut être volumineux.
- */
-export async function syncSnapshotToServer(chatId: string, snapshot: Snapshot): Promise<void> {
+async function _flushSnapshot(chatId: string): Promise<void> {
+  const snapshot = _snapPending.get(chatId);
+  _snapPending.delete(chatId);
+  _snapTimers.delete(chatId);
+
+  if (!snapshot) {
+    return;
+  }
+
   const headers = getHeaders();
 
   if (!headers) {
@@ -76,6 +106,55 @@ export async function syncSnapshotToServer(chatId: string, snapshot: Snapshot): 
   } catch (err) {
     logger.warn('syncSnapshotToServer failed (non-blocking):', err);
   }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+
+/**
+ * Sync les messages d'une conversation vers le serveur.
+ * Debounced à 4 s : plusieurs appels rapides → une seule requête réseau.
+ * Ne bloque pas — erreurs silencieuses en prod.
+ */
+export function syncMessagesToServer(chatId: string, messages: Message[], description?: string): void {
+  if (!_authToken) {
+    return;
+  }
+
+  _msgPending.set(chatId, { messages, description });
+
+  const existing = _msgTimers.get(chatId);
+
+  if (existing) {
+    clearTimeout(existing);
+  }
+
+  _msgTimers.set(
+    chatId,
+    setTimeout(() => _flushMessages(chatId), DEBOUNCE_MS),
+  );
+}
+
+/**
+ * Sync le snapshot (fichiers WebContainer) vers le serveur.
+ * Debounced à 4 s — séparé des messages car peut être volumineux.
+ */
+export function syncSnapshotToServer(chatId: string, snapshot: Snapshot): void {
+  if (!_authToken) {
+    return;
+  }
+
+  _snapPending.set(chatId, snapshot);
+
+  const existing = _snapTimers.get(chatId);
+
+  if (existing) {
+    clearTimeout(existing);
+  }
+
+  _snapTimers.set(
+    chatId,
+    setTimeout(() => _flushSnapshot(chatId), DEBOUNCE_MS),
+  );
 }
 
 /**
